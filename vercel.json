@@ -1,9 +1,14 @@
 {
   "version": 2,
+  "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/(.*)",
-      "destination": "/server.ts"
+      "source": "/api/(.*)",
+      "destination": "/server.ts?__route=/api/$1"
+    },
+    {
+      "source": "/((?!assets/).*)",
+      "destination": "/server.ts?__route=/$1"
     }
   ],
   "functions": {

@@ -13,6 +13,25 @@ async function startServer() {
   app.use(express.json({ limit: '15mb' }));
   app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
+  // Support Vercel serverless rewrite routing & preserve original requested path
+  app.use((req, res, next) => {
+    if (req.query && typeof req.query.__route === 'string') {
+      const targetRoute = req.query.__route;
+      delete req.query.__route;
+      const queryParams = new URLSearchParams(req.query as Record<string, string>).toString();
+      req.url = queryParams ? `${targetRoute}?${queryParams}` : targetRoute;
+    } else if (req.url === '/server.ts' || req.url.startsWith('/server.ts?')) {
+      const target = (req.headers['x-matched-path'] as string) ||
+                     (req.headers['x-forwarded-uri'] as string) ||
+                     (req.headers['x-original-url'] as string) ||
+                     req.originalUrl;
+      if (target && !target.startsWith('/server.ts')) {
+        req.url = target;
+      }
+    }
+    next();
+  });
+
   // ----------------------------------------------------
   // API Endpoints
   // ----------------------------------------------------
@@ -397,6 +416,12 @@ async function startServer() {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
+      if (req.path.startsWith('/api/')) {
+        return res.status(404).json({ error: 'API endpoint not found' });
+      }
+      if (req.path.startsWith('/assets/')) {
+        return res.status(404).type('text/plain').send('Asset not found');
+      }
       const indexPath = path.join(distPath, 'index.html');
       res.sendFile(indexPath, (err) => {
         if (err) {
