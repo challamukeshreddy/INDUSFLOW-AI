@@ -1,411 +1,725 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext.js';
-import { ApprovalItem } from '../../types/index.js';
 import {
-  ROADMAP_STAGES,
-  RoadmapStageKey,
   evaluateRoadmapGraph,
+  ROADMAP_STAGES,
   EvaluatedGraphNode,
   VisualGraphStatus,
+  RoadmapStageKey,
 } from './roadmapTypes.js';
 import { RoadmapDetailPanel } from './RoadmapDetailPanel.js';
 import {
   Network,
-  ArrowDown,
-  ArrowRight,
+  GitBranch,
+  Search,
   CheckCircle2,
   Clock,
   AlertTriangle,
   Lock,
   Hourglass,
-  Layers,
-  GitBranch,
+  ArrowRight,
+  ArrowDown,
   Sparkles,
-  Search,
-  Filter,
-  Eye,
   RotateCcw,
-  Zap,
-  Info,
-  Check,
-  Building2,
+  SlidersHorizontal,
   ChevronRight,
   ShieldAlert,
 } from 'lucide-react';
 
 export const DependencyMapView: React.FC = () => {
-  const { approvals, dependencyEdges, documents, updateApprovalStatus, setSelectedApproval, setActiveTab } =
-    useApp();
+  const {
+    approvals,
+    dependencyEdges,
+    documents,
+    profile,
+    updateApprovalStatus,
+  } = useApp();
 
-  const [selectedNodeCode, setSelectedNodeCode] = useState<string>('SPCB_CTE');
-  const [viewMode, setViewMode] = useState<'roadmap_flow' | 'graph_canvas'>('roadmap_flow');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [highlightParallelOnly, setHighlightParallelOnly] = useState<boolean>(false);
-  const [highlightCriticalOnly, setHighlightCriticalOnly] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  // Active view: 'dependency_graph' (A -> B DAG Canvas) or 'roadmap_flow' (Sequential Stage Pipeline)
+  const [viewMode, setViewMode] = useState<'dependency_graph' | 'roadmap_flow'>('dependency_graph');
 
-  // 1. Data-Driven Evaluation of all nodes
+  // Selected node code for detail drawer
+  const [selectedNodeCode, setSelectedNodeCode] = useState<string | null>('MPCB_CTE');
+
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [stageFilter, setStageFilter] = useState<'all' | 'pre_establishment' | 'pre_construction' | 'pre_operation'>('all');
+  const [statusFilter, setStatusFilter] = useState<VisualGraphStatus | 'all'>('all');
+  const [highlightCriticalOnly, setHighlightCriticalOnly] = useState(false);
+  const [highlightParallelOnly, setHighlightParallelOnly] = useState(false);
+
+  // Evaluated nodes using the central roadmap evaluation engine
   const evaluatedNodes = useMemo(() => {
     return evaluateRoadmapGraph(approvals, dependencyEdges, documents);
   }, [approvals, dependencyEdges, documents]);
 
-  const selectedNode = useMemo(() => {
-    return (
-      evaluatedNodes.find((n) => n.approval.code === selectedNodeCode) ||
-      evaluatedNodes[0] ||
-      null
-    );
-  }, [evaluatedNodes, selectedNodeCode]);
+  // Map of code -> EvaluatedGraphNode for O(1) lookups
+  const nodeMap = useMemo(() => {
+    return new Map<string, EvaluatedGraphNode>(evaluatedNodes.map((n) => [n.approval.code, n]));
+  }, [evaluatedNodes]);
 
-  // Status Metrics Calculation
+  // Selected node object
+  const selectedNode = selectedNodeCode ? nodeMap.get(selectedNodeCode) : null;
+
+  // Compute status metric counts for the legend
   const metrics = useMemo(() => {
-    const counts = {
-      completed: 0,
-      in_progress: 0,
-      attention_required: 0,
-      blocked: 0,
-      not_started: 0,
-      total: evaluatedNodes.length,
-    };
+    const total = evaluatedNodes.length;
+    let completed = 0;
+    let in_progress = 0;
+    let attention = 0;
+    let blocked = 0;
+    let not_started = 0;
+
     evaluatedNodes.forEach((n) => {
-      counts[n.visualStatus]++;
+      switch (n.visualStatus) {
+        case 'completed':
+          completed++;
+          break;
+        case 'in_progress':
+          in_progress++;
+          break;
+        case 'attention_required':
+          attention++;
+          break;
+        case 'blocked':
+          blocked++;
+          break;
+        case 'not_started':
+        default:
+          not_started++;
+          break;
+      }
     });
-    return counts;
+
+    return { total, completed, in_progress, attention, blocked, not_started };
   }, [evaluatedNodes]);
 
   // Filtered nodes
   const filteredNodes = useMemo(() => {
     return evaluatedNodes.filter((node) => {
+      const item = node.approval;
+
+      // 1. Stage filter
+      if (stageFilter !== 'all' && item.stage !== stageFilter) {
+        return false;
+      }
+
+      // 2. Status filter
       if (statusFilter !== 'all' && node.visualStatus !== statusFilter) {
         return false;
       }
-      if (highlightCriticalOnly && !node.approval.isCriticalPath) {
+
+      // 3. Critical path toggle
+      if (highlightCriticalOnly && !item.isCriticalPath) {
         return false;
       }
+
+      // 4. Parallel paths toggle
       if (highlightParallelOnly && !node.canRunParallel) {
         return false;
       }
+
+      // 5. Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchTitle = (node.approval.title || node.approval.name || '').toLowerCase().includes(q);
-        const matchCode = node.approval.code.toLowerCase().includes(q);
-        const matchAuth = (node.approval.authority || node.approval.issuingAuthority || '')
-          .toLowerCase()
-          .includes(q);
-        if (!matchTitle && !matchCode && !matchAuth) return false;
+        const matchesName = (item.name || item.title || '').toLowerCase().includes(q);
+        const matchesCode = (item.code || '').toLowerCase().includes(q);
+        const matchesAuth = (item.authority || item.issuingAuthority || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesCode && !matchesAuth) {
+          return false;
+        }
       }
+
       return true;
     });
-  }, [evaluatedNodes, statusFilter, highlightCriticalOnly, highlightParallelOnly, searchQuery]);
+  }, [
+    evaluatedNodes,
+    stageFilter,
+    statusFilter,
+    highlightCriticalOnly,
+    highlightParallelOnly,
+    searchQuery,
+  ]);
 
-  // Group nodes by the 7 Roadmap Stages
+  // Group nodes by the 7 roadmap stages for Roadmap View
   const stageGroupedNodes = useMemo(() => {
     return ROADMAP_STAGES.map((stage) => {
-      const nodes = filteredNodes.filter((n) => n.stageKey === stage.key);
-      return {
-        stage,
-        nodes,
-        totalInStage: evaluatedNodes.filter((n) => n.stageKey === stage.key).length,
-      };
+      const stageNodes = filteredNodes.filter((n) => n.stageKey === stage.key);
+      return { stage, nodes: stageNodes };
     });
-  }, [ROADMAP_STAGES, filteredNodes, evaluatedNodes]);
+  }, [filteredNodes]);
 
-  // Styling helper for the 5 requested colors:
-  // GREEN = Completed
-  // BLUE = In Progress
-  // YELLOW = Attention Required
-  // RED = Blocked
-  // GREY = Not Started
-  const getNodeColorClasses = (status: VisualGraphStatus, isSelected: boolean) => {
+  // Group nodes by 3 statutory tiers for Dependency Graph Canvas
+  const tierGroupedNodes = useMemo(() => {
+    return [
+      {
+        id: 'tier_1',
+        title: 'Stage 1: Pre-Establishment',
+        subtitle: 'Land, Baseline Identity & Environmental CTE',
+        stageValue: 'pre_establishment',
+        nodes: filteredNodes.filter((n) => n.approval.stage === 'pre_establishment'),
+      },
+      {
+        id: 'tier_2',
+        title: 'Stage 2: Pre-Construction',
+        subtitle: 'Factory Layout, Provisional Fire NOC & Utilities',
+        stageValue: 'pre_construction',
+        nodes: filteredNodes.filter((n) => n.approval.stage === 'pre_construction'),
+      },
+      {
+        id: 'tier_3',
+        title: 'Stage 3: Pre-Operation',
+        subtitle: 'Operating Consents, Final Fire & Factory License',
+        stageValue: 'pre_operation',
+        nodes: filteredNodes.filter((n) => n.approval.stage === 'pre_operation'),
+      },
+    ];
+  }, [filteredNodes]);
+
+  // Helpers for styling nodes based on status
+  const getNodeStyle = (status: VisualGraphStatus, isSelected: boolean) => {
     switch (status) {
-      case 'completed': // GREEN
+      case 'completed':
         return {
           container: isSelected
-            ? 'bg-emerald-50/95 border-emerald-500 ring-2 ring-emerald-500 shadow-md'
-            : 'bg-white border-emerald-300 hover:border-emerald-400 hover:bg-emerald-50/40 shadow-2xs',
-          badge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+            ? 'bg-emerald-50/90 border-emerald-500 ring-2 ring-emerald-400 shadow-sm'
+            : 'bg-white border-emerald-200 hover:border-emerald-400 hover:bg-emerald-50/30',
+          badge: 'bg-emerald-100 text-emerald-800 border-emerald-300',
           dot: 'bg-emerald-500',
           icon: CheckCircle2,
-          text: 'text-emerald-900',
+          label: 'Completed',
         };
-      case 'in_progress': // BLUE
+      case 'in_progress':
         return {
           container: isSelected
-            ? 'bg-blue-50/95 border-blue-500 ring-2 ring-blue-500 shadow-md'
-            : 'bg-white border-blue-300 hover:border-blue-400 hover:bg-blue-50/40 shadow-2xs',
-          badge: 'bg-blue-100 text-blue-800 border-blue-200',
+            ? 'bg-blue-50/90 border-blue-500 ring-2 ring-blue-400 shadow-sm'
+            : 'bg-white border-blue-200 hover:border-blue-400 hover:bg-blue-50/30',
+          badge: 'bg-blue-100 text-blue-800 border-blue-300',
           dot: 'bg-blue-500',
           icon: Clock,
-          text: 'text-blue-900',
+          label: 'In Progress',
         };
-      case 'attention_required': // YELLOW
+      case 'attention_required':
         return {
           container: isSelected
-            ? 'bg-amber-50/95 border-amber-500 ring-2 ring-amber-500 shadow-md'
-            : 'bg-white border-amber-300 hover:border-amber-400 hover:bg-amber-50/40 shadow-2xs',
-          badge: 'bg-amber-100 text-amber-800 border-amber-200',
+            ? 'bg-amber-50/90 border-amber-500 ring-2 ring-amber-400 shadow-sm'
+            : 'bg-white border-amber-300 hover:border-amber-400 hover:bg-amber-50/30',
+          badge: 'bg-amber-100 text-amber-900 border-amber-300',
           dot: 'bg-amber-500',
           icon: AlertTriangle,
-          text: 'text-amber-900',
+          label: 'Attention Required',
         };
-      case 'blocked': // RED
+      case 'blocked':
         return {
           container: isSelected
-            ? 'bg-rose-50/95 border-rose-500 ring-2 ring-rose-500 shadow-md'
-            : 'bg-white border-rose-300 hover:border-rose-400 hover:bg-rose-50/40 shadow-2xs',
-          badge: 'bg-rose-100 text-rose-800 border-rose-200',
+            ? 'bg-rose-50/90 border-rose-500 ring-2 ring-rose-400 shadow-sm'
+            : 'bg-white border-rose-300 hover:border-rose-400 hover:bg-rose-50/30',
+          badge: 'bg-rose-100 text-rose-900 border-rose-300',
           dot: 'bg-rose-500',
           icon: Lock,
-          text: 'text-rose-900',
+          label: 'Blocked',
         };
-      case 'not_started': // GREY
+      case 'not_started':
       default:
         return {
           container: isSelected
-            ? 'bg-slate-100 border-slate-500 ring-2 ring-slate-500 shadow-md'
-            : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/60 shadow-2xs',
-          badge: 'bg-slate-100 text-slate-700 border-slate-200',
+            ? 'bg-slate-50 border-slate-600 ring-2 ring-slate-400 shadow-sm'
+            : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50',
+          badge: 'bg-slate-100 text-slate-700 border-slate-300',
           dot: 'bg-slate-400',
           icon: Hourglass,
-          text: 'text-slate-800',
+          label: 'Not Started',
         };
     }
   };
 
-  // Quick Action: Simulate CTE approval to witness downstream unblocking
-  const handleSimulateUnblockCTE = () => {
-    updateApprovalStatus('SPCB_CTE', { status: 'approved' });
-    setSelectedNodeCode('FACTORY_PLAN_APPROVAL');
+  const getStageLabel = (stage: string) => {
+    switch (stage) {
+      case 'pre_establishment':
+        return 'Pre-Establishment';
+      case 'pre_construction':
+        return 'Pre-Construction';
+      case 'pre_operation':
+        return 'Pre-Operation';
+      default:
+        return stage ? stage.replace(/_/g, ' ') : 'General';
+    }
+  };
+
+  // Quick simulation helper
+  const handleSimulateCte = () => {
+    updateApprovalStatus('MPCB_CTE', { status: 'approved' });
   };
 
   const handleResetSimulation = () => {
-    updateApprovalStatus('SPCB_CTE', { status: 'query_raised' });
-    updateApprovalStatus('FIRE_NOC_PROVISIONAL', { status: 'documents_pending' });
-    updateApprovalStatus('FACTORY_PLAN_APPROVAL', { status: 'not_started' });
+    updateApprovalStatus('MPCB_CTE', { status: 'query_raised' });
+    updateApprovalStatus('FACTORY_PLAN', { status: 'not_started' });
+    updateApprovalStatus('FIRE_PROVISIONAL', { status: 'not_started' });
   };
 
   return (
-    <div className="space-y-6">
-      {/* 1. Header & Title */}
-      <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-2xs space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 flex items-center justify-center shadow-2xs">
-                <Network className="w-5 h-5" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-slate-900">
-                  Approval Roadmap &amp; Interactive Dependency Graph
-                </h1>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Visual statutory progression mapping prerequisites, concurrent filings, and downstream blocked clearances.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Simulation Bar */}
+    <div className="space-y-5">
+      {/* 1. Header Banner */}
+      <div className="bg-white rounded-xl p-4 sm:p-5 border border-slate-200 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={handleSimulateUnblockCTE}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer"
-              title="Demonstrate unblocking downstream factory and fire approvals by approving CTE"
-            >
-              <Zap className="w-3.5 h-3.5" />
-              <span>Simulate CTE Approval</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleResetSimulation}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition-all cursor-pointer"
-              title="Reset simulation back to initial scenario"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-              <span>Reset State</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 2. Mandatory Color Legend Bar */}
-        <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-3 flex-wrap">
-            <span className="font-bold text-slate-700 flex items-center gap-1">
-              <Layers className="w-3.5 h-3.5 text-slate-400" />
-              <span>Color Coding:</span>
+            <h2 className="font-bold text-base sm:text-lg text-slate-900">
+              Dependency Graph &amp; Approval Roadmap
+            </h2>
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-mono font-bold border border-slate-200">
+              {filteredNodes.length} Clearances
             </span>
-
-            {/* GREEN = Completed */}
-            <button
-              type="button"
-              onClick={() => setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
-                statusFilter === 'completed'
-                  ? 'bg-emerald-100 text-emerald-900 border-emerald-400 font-bold ring-2 ring-emerald-300'
-                  : 'bg-emerald-50/70 text-emerald-800 border-emerald-200 hover:bg-emerald-100/70'
-              }`}
-            >
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-200" />
-              <span>GREEN = Completed</span>
-              <span className="ml-1 font-mono text-[10px] bg-emerald-200/80 text-emerald-900 px-1.5 py-0.2 rounded-full font-bold">
-                {metrics.completed}
-              </span>
-            </button>
-
-            {/* BLUE = In Progress */}
-            <button
-              type="button"
-              onClick={() => setStatusFilter(statusFilter === 'in_progress' ? 'all' : 'in_progress')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
-                statusFilter === 'in_progress'
-                  ? 'bg-blue-100 text-blue-900 border-blue-400 font-bold ring-2 ring-blue-300'
-                  : 'bg-blue-50/70 text-blue-800 border-blue-200 hover:bg-blue-100/70'
-              }`}
-            >
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-blue-200" />
-              <span>BLUE = In Progress</span>
-              <span className="ml-1 font-mono text-[10px] bg-blue-200/80 text-blue-900 px-1.5 py-0.2 rounded-full font-bold">
-                {metrics.in_progress}
-              </span>
-            </button>
-
-            {/* YELLOW = Attention Required */}
-            <button
-              type="button"
-              onClick={() => setStatusFilter(statusFilter === 'attention_required' ? 'all' : 'attention_required')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
-                statusFilter === 'attention_required'
-                  ? 'bg-amber-100 text-amber-900 border-amber-400 font-bold ring-2 ring-amber-300'
-                  : 'bg-amber-50/70 text-amber-800 border-amber-200 hover:bg-amber-100/70'
-              }`}
-            >
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-amber-200" />
-              <span>YELLOW = Attention Required</span>
-              <span className="ml-1 font-mono text-[10px] bg-amber-200/80 text-amber-900 px-1.5 py-0.2 rounded-full font-bold">
-                {metrics.attention_required}
-              </span>
-            </button>
-
-            {/* RED = Blocked */}
-            <button
-              type="button"
-              onClick={() => setStatusFilter(statusFilter === 'blocked' ? 'all' : 'blocked')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
-                statusFilter === 'blocked'
-                  ? 'bg-rose-100 text-rose-900 border-rose-400 font-bold ring-2 ring-rose-300'
-                  : 'bg-rose-50/70 text-rose-800 border-rose-200 hover:bg-rose-100/70'
-              }`}
-            >
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-rose-200" />
-              <span>RED = Blocked</span>
-              <span className="ml-1 font-mono text-[10px] bg-rose-200/80 text-rose-900 px-1.5 py-0.2 rounded-full font-bold">
-                {metrics.blocked}
-              </span>
-            </button>
-
-            {/* GREY = Not Started */}
-            <button
-              type="button"
-              onClick={() => setStatusFilter(statusFilter === 'not_started' ? 'all' : 'not_started')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
-                statusFilter === 'not_started'
-                  ? 'bg-slate-200 text-slate-900 border-slate-400 font-bold ring-2 ring-slate-300'
-                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              <span className="w-2.5 h-2.5 rounded-full bg-slate-400 ring-2 ring-slate-200" />
-              <span>GREY = Not Started</span>
-              <span className="ml-1 font-mono text-[10px] bg-slate-200 text-slate-800 px-1.5 py-0.2 rounded-full font-bold">
-                {metrics.not_started}
-              </span>
-            </button>
+            <span className="text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-md">
+              A &rarr; B Directed Flow (B depends on A)
+            </span>
           </div>
-
-          {statusFilter !== 'all' && (
-            <button
-              type="button"
-              onClick={() => setStatusFilter('all')}
-              className="text-[11px] text-teal-700 font-bold hover:underline cursor-pointer"
-            >
-              Reset Filter (Show All {metrics.total})
-            </button>
-          )}
+          <p className="text-xs text-slate-500 mt-1">
+            Visualizing statutory precedence constraints for {profile?.companyName || 'Industrial Enterprise'}. If clearance A is blocked or pending, dependent clearance B is locked.
+          </p>
         </div>
 
-        {/* 3. Toolbar: View Mode, Search, Toggles */}
-        <div className="pt-2 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-          {/* View Mode Toggle */}
-          <div className="inline-flex rounded-xl p-1 bg-slate-100 border border-slate-200 text-slate-700">
-            <button
-              type="button"
-              onClick={() => setViewMode('roadmap_flow')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                viewMode === 'roadmap_flow'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <GitBranch className="w-3.5 h-3.5 text-teal-600" />
-              <span>Roadmap Pipeline Flow</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode('graph_canvas')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                viewMode === 'graph_canvas'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Network className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Network Dependency Canvas</span>
-            </button>
-          </div>
+        {/* Quick Simulation Action */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={handleSimulateCte}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-bold transition-all cursor-pointer"
+            title="Simulate clearance of MPCB CTE to watch downstream Factory, Fire, and Power unblock!"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Simulate CTE Approval</span>
+          </button>
 
-          {/* Search & Toggles */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search clearances..."
-                className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 w-44"
-              />
-            </div>
-
-            <label className="flex items-center gap-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={highlightParallelOnly}
-                onChange={(e) => setHighlightParallelOnly(e.target.checked)}
-                className="rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-              />
-              <span>Parallel Paths</span>
-            </label>
-
-            <label className="flex items-center gap-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={highlightCriticalOnly}
-                onChange={(e) => setHighlightCriticalOnly(e.target.checked)}
-                className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-              />
-              <span>Critical Path</span>
-            </label>
-          </div>
+          <button
+            type="button"
+            onClick={handleResetSimulation}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all cursor-pointer"
+            title="Reset CTE to Query Raised to see downstream clearances become blocked again"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Reset Demo</span>
+          </button>
         </div>
       </div>
 
-      {/* 4. Main Content Area: Left = Roadmap or Canvas, Right = Detail Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left: Visual Graph Display (takes 7 or 8 columns on large screens) */}
+      {/* 2. Simple Legend Bar */}
+      <div className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap text-xs">
+          <span className="font-bold text-slate-700 text-[11px] uppercase tracking-wider mr-1">
+            Status Legend:
+          </span>
+
+          {/* Completed */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'completed' ? 'all' : 'completed')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
+              statusFilter === 'completed'
+                ? 'bg-emerald-100 text-emerald-900 border-emerald-400 font-bold ring-2 ring-emerald-300'
+                : 'bg-emerald-50/60 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+            }`}
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+            <span>Completed</span>
+            <span className="ml-1 font-mono text-[10px] bg-emerald-200/80 text-emerald-900 px-1.5 py-0.2 rounded-full font-bold">
+              {metrics.completed}
+            </span>
+          </button>
+
+          {/* In Progress */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'in_progress' ? 'all' : 'in_progress')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
+              statusFilter === 'in_progress'
+                ? 'bg-blue-100 text-blue-900 border-blue-400 font-bold ring-2 ring-blue-300'
+                : 'bg-blue-50/60 text-blue-800 border-blue-200 hover:bg-blue-100'
+            }`}
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+            <span>In Progress</span>
+            <span className="ml-1 font-mono text-[10px] bg-blue-200/80 text-blue-900 px-1.5 py-0.2 rounded-full font-bold">
+              {metrics.in_progress}
+            </span>
+          </button>
+
+          {/* Attention */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'attention_required' ? 'all' : 'attention_required')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
+              statusFilter === 'attention_required'
+                ? 'bg-amber-100 text-amber-950 border-amber-400 font-bold ring-2 ring-amber-300'
+                : 'bg-amber-50/60 text-amber-900 border-amber-200 hover:bg-amber-100'
+            }`}
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+            <span>Attention</span>
+            <span className="ml-1 font-mono text-[10px] bg-amber-200/80 text-amber-900 px-1.5 py-0.2 rounded-full font-bold">
+              {metrics.attention}
+            </span>
+          </button>
+
+          {/* Blocked */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'blocked' ? 'all' : 'blocked')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
+              statusFilter === 'blocked'
+                ? 'bg-rose-100 text-rose-900 border-rose-400 font-bold ring-2 ring-rose-300'
+                : 'bg-rose-50/60 text-rose-800 border-rose-200 hover:bg-rose-100'
+            }`}
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+            <span>Blocked</span>
+            <span className="ml-1 font-mono text-[10px] bg-rose-200/80 text-rose-900 px-1.5 py-0.2 rounded-full font-bold">
+              {metrics.blocked}
+            </span>
+          </button>
+
+          {/* Not Started */}
+          <button
+            type="button"
+            onClick={() => setStatusFilter(statusFilter === 'not_started' ? 'all' : 'not_started')}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium cursor-pointer transition-all ${
+              statusFilter === 'not_started'
+                ? 'bg-slate-200 text-slate-900 border-slate-400 font-bold ring-2 ring-slate-300'
+                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+            }`}
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+            <span>Not Started</span>
+            <span className="ml-1 font-mono text-[10px] bg-slate-200 text-slate-800 px-1.5 py-0.2 rounded-full font-bold">
+              {metrics.not_started}
+            </span>
+          </button>
+        </div>
+
+        {statusFilter !== 'all' && (
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className="text-[11px] text-teal-700 font-bold hover:underline cursor-pointer"
+          >
+            Reset Filter (Show All {metrics.total})
+          </button>
+        )}
+      </div>
+
+      {/* 3. Toolbar: View Mode, Filters, Toggles */}
+      <div className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-2xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        {/* View Mode Toggle: Dependency Graph vs Roadmap */}
+        <div className="inline-flex rounded-xl p-1 bg-slate-100 border border-slate-200 text-slate-700 shrink-0">
+          <button
+            type="button"
+            onClick={() => setViewMode('dependency_graph')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              viewMode === 'dependency_graph'
+                ? 'bg-white text-indigo-900 shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Network className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Dependency Graph (A &rarr; B)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('roadmap_flow')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              viewMode === 'roadmap_flow'
+                ? 'bg-white text-teal-900 shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <GitBranch className="w-3.5 h-3.5 text-teal-600" />
+            <span>Roadmap Pipeline Flow</span>
+          </button>
+        </div>
+
+        {/* Search, Stage Filter & Toggles */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Search */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search clearances..."
+              className="pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-900 bg-slate-50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 w-36 sm:w-44"
+            />
+          </div>
+
+          {/* Stage Filter */}
+          <select
+            value={stageFilter}
+            onChange={(e) => setStageFilter(e.target.value as any)}
+            className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 cursor-pointer font-medium"
+          >
+            <option value="all">All Stages</option>
+            <option value="pre_establishment">Pre-Establishment</option>
+            <option value="pre_construction">Pre-Construction</option>
+            <option value="pre_operation">Pre-Operation</option>
+          </select>
+
+          {/* Critical Path Toggle */}
+          <label className="flex items-center gap-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={highlightCriticalOnly}
+              onChange={(e) => setHighlightCriticalOnly(e.target.checked)}
+              className="rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+            />
+            <span className="font-semibold">Critical Path</span>
+          </label>
+
+          {/* Parallel Paths Toggle */}
+          <label className="flex items-center gap-1.5 text-xs text-slate-700 bg-slate-50 hover:bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={highlightParallelOnly}
+              onChange={(e) => setHighlightParallelOnly(e.target.checked)}
+              className="rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+            />
+            <span className="font-semibold">Parallel Paths</span>
+          </label>
+        </div>
+      </div>
+
+      {/* 4. Main Graph & Drawer Split View */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Left Side: Graph Visualization Canvas */}
         <div className={selectedNode ? 'lg:col-span-7 xl:col-span-8' : 'lg:col-span-12'}>
-          {viewMode === 'roadmap_flow' ? (
+          {viewMode === 'dependency_graph' ? (
             /* ======================================================== */
-            /* VIEW 1: ROADMAP PIPELINE FLOW (7 Stages with Down Arrows) */
+            /* VIEW 1: DEPENDENCY GRAPH (A -> B DAG Flow Canvas)        */
+            /* ======================================================== */
+            <div className="space-y-4">
+              {/* Visual Dependency Flow Banner */}
+              <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl flex items-center justify-between text-xs text-indigo-950">
+                <div className="flex items-center gap-2">
+                  <Network className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>
+                    <strong>Rule: A &rarr; B (B depends on A).</strong> Upstream clearance A must be approved before downstream clearance B can proceed.
+                  </span>
+                </div>
+                {selectedNode && (
+                  <span className="text-[11px] font-semibold bg-white px-2 py-0.5 rounded border border-indigo-200 text-indigo-800 shrink-0">
+                    Inspecting: {selectedNode.approval.code}
+                  </span>
+                )}
+              </div>
+
+              {/* Tier Columns with Directed Connectors */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {tierGroupedNodes.map((tier, tierIdx) => {
+                  return (
+                    <div
+                      key={tier.id}
+                      className="bg-slate-50/70 rounded-xl border border-slate-200 p-3 flex flex-col space-y-3"
+                    >
+                      {/* Tier Header */}
+                      <div className="border-b border-slate-200 pb-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-xs text-slate-900 uppercase tracking-wide">
+                            {tier.title}
+                          </span>
+                          <span className="text-[10px] font-mono font-bold bg-white px-1.5 py-0.2 rounded border border-slate-200 text-slate-600">
+                            {tier.nodes.length}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{tier.subtitle}</p>
+                      </div>
+
+                      {/* Nodes in this Tier */}
+                      <div className="space-y-2.5 flex-1">
+                        {tier.nodes.length > 0 ? (
+                          tier.nodes.map((node) => {
+                            const item = node.approval;
+                            const isSelected = selectedNodeCode === item.code;
+                            const style = getNodeStyle(node.visualStatus, isSelected);
+                            const StatusIcon = style.icon;
+
+                            // Direct prerequisites (A) and downstream dependents (B)
+                            const prereqCount = node.incompletePrereqs.length + node.clearedPrereqs.length;
+                            const dependentCount = node.outgoingDependents.length;
+
+                            return (
+                              <div
+                                key={item.code}
+                                onClick={() => setSelectedNodeCode(item.code)}
+                                className={`p-3 rounded-xl border transition-all cursor-pointer text-left relative ${style.container}`}
+                              >
+                                {/* Top Row: Stage & Status Pill */}
+                                <div className="flex items-center justify-between gap-1 mb-1.5">
+                                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700">
+                                    {getStageLabel(item.stage)}
+                                  </span>
+
+                                  <span
+                                    className={`text-[9px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 ${style.badge}`}
+                                  >
+                                    <StatusIcon className="w-2.5 h-2.5" />
+                                    <span>{style.label}</span>
+                                  </span>
+                                </div>
+
+                                {/* Node Body: Approval Name & Authority (NO large text) */}
+                                <h3 className="font-bold text-xs text-slate-900 leading-snug line-clamp-2">
+                                  {item.title || item.name}
+                                </h3>
+
+                                <p className="text-[10px] text-slate-500 mt-1 truncate flex items-center gap-1">
+                                  <span>{item.issuingAuthority || item.authority}</span>
+                                </p>
+
+                                {/* Blocked Indicator if A is blocked */}
+                                {node.isBlocked && (
+                                  <div className="mt-2 p-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-[10px] flex items-center gap-1">
+                                    <Lock className="w-3 h-3 text-rose-600 shrink-0" />
+                                    <span className="truncate font-semibold">
+                                      Blocked by: {node.blockedByNames[0] || 'Upstream'}
+                                    </span>
+                                  </div>
+                                )}
+
+                                {/* Dependency Relationship Line: A -> B indication */}
+                                <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-400">
+                                  <span>
+                                    {prereqCount > 0 ? `Depends on ${prereqCount}` : 'Entry Level'}
+                                  </span>
+                                  <span className="flex items-center gap-0.5 font-bold text-indigo-700">
+                                    <span>Unlocks {dependentCount}</span>
+                                    <ArrowRight className="w-2.5 h-2.5" />
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="p-4 text-center text-xs text-slate-400 italic">
+                            No clearances in this tier.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Interactive Chain Detail for Selected Node */}
+              {selectedNode && (
+                <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                      <GitBranch className="w-4 h-4 text-indigo-600" />
+                      <span>Direct Dependency Chain for &ldquo;{selectedNode.approval.title || selectedNode.approval.name}&rdquo;</span>
+                    </span>
+                    <span className="text-[11px] font-mono text-slate-500">
+                      Code: {selectedNode.approval.code}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    {/* Incoming Upstream: A -> SelectedNode */}
+                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="font-bold text-slate-800 flex items-center justify-between text-xs">
+                        <span>Upstream Prerequisites (A &rarr; {selectedNode.approval.code})</span>
+                        <span className="text-[10px] text-slate-500 font-normal">
+                          {selectedNode.incompletePrereqs.length + selectedNode.clearedPrereqs.length} Required
+                        </span>
+                      </div>
+
+                      {selectedNode.incompletePrereqs.length === 0 && selectedNode.clearedPrereqs.length === 0 ? (
+                        <p className="text-slate-500 text-[11px] italic">
+                          None. This clearance has no upstream dependencies and can be initiated immediately.
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {selectedNode.clearedPrereqs.map((p) => (
+                            <div
+                              key={p.code}
+                              onClick={() => setSelectedNodeCode(p.code)}
+                              className="p-2 rounded bg-white border border-emerald-200 text-emerald-950 flex items-center justify-between text-xs cursor-pointer hover:border-emerald-400 shadow-2xs"
+                            >
+                              <div className="flex items-center gap-1.5 truncate">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span className="font-semibold truncate">{p.name}</span>
+                              </div>
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 shrink-0">
+                                Approved &rarr; Unlocked
+                              </span>
+                            </div>
+                          ))}
+                          {selectedNode.incompletePrereqs.map((p) => (
+                            <div
+                              key={p.code}
+                              onClick={() => setSelectedNodeCode(p.code)}
+                              className="p-2 rounded bg-rose-50 border border-rose-200 text-rose-950 flex items-center justify-between text-xs cursor-pointer hover:border-rose-400 shadow-2xs"
+                            >
+                              <div className="flex items-center gap-1.5 truncate">
+                                <Lock className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                                <span className="font-bold truncate">{p.name}</span>
+                              </div>
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 shrink-0">
+                                Pending &rarr; Blocks This
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Outgoing Downstream: SelectedNode -> B */}
+                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="font-bold text-slate-800 flex items-center justify-between text-xs">
+                        <span>Downstream Clearances ({selectedNode.approval.code} &rarr; B)</span>
+                        <span className="text-[10px] text-slate-500 font-normal">
+                          {selectedNode.outgoingDependents.length} Unlocked
+                        </span>
+                      </div>
+
+                      {selectedNode.outgoingDependents.length === 0 ? (
+                        <p className="text-slate-500 text-[11px] italic">
+                          None. This is a terminal operational compliance clearance.
+                        </p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {selectedNode.outgoingDependents.map((dep) => (
+                            <div
+                              key={dep.code}
+                              onClick={() => setSelectedNodeCode(dep.code)}
+                              className={`p-2 rounded border flex items-center justify-between text-xs cursor-pointer transition-all shadow-2xs ${
+                                dep.isLockedByThis
+                                  ? 'bg-amber-50 border-amber-200 text-amber-950 hover:border-amber-400'
+                                  : 'bg-white border-slate-200 text-slate-800 hover:border-slate-400'
+                              }`}
+                            >
+                              <div className="flex items-center gap-1.5 truncate">
+                                <ArrowRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <span className="font-medium truncate">{dep.name}</span>
+                              </div>
+                              <span
+                                className={`text-[9px] font-bold px-1.5 py-0.2 rounded shrink-0 ${
+                                  dep.isLockedByThis
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-slate-100 text-slate-700'
+                                }`}
+                              >
+                                {dep.isLockedByThis ? 'Affected / Blocked' : 'Unlocked'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ======================================================== */
+            /* VIEW 2: ROADMAP PIPELINE FLOW (7 Stages with Down Arrows) */
             /* ======================================================== */
             <div className="space-y-4">
               {stageGroupedNodes.map(({ stage, nodes }, stageIndex) => {
@@ -414,102 +728,94 @@ export const DependencyMapView: React.FC = () => {
 
                 return (
                   <div key={stage.key} className="space-y-3">
-                    {/* Stage Header Banner */}
-                    <div className="bg-white rounded-xl p-3.5 border border-slate-200/90 shadow-2xs flex items-center justify-between gap-3">
+                    {/* Stage Header */}
+                    <div className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-2xs flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5">
                         <div className="w-7 h-7 rounded-lg bg-slate-900 text-white font-mono font-bold text-xs flex items-center justify-center shadow-2xs">
                           0{stage.order}
                         </div>
                         <div>
-                          <h2 className="font-bold text-xs uppercase tracking-wider text-slate-900 flex items-center gap-2">
+                          <h3 className="font-bold text-xs uppercase tracking-wider text-slate-900 flex items-center gap-2">
                             <span>{stage.label}</span>
-                            <span className="text-[10px] font-normal text-slate-500 font-sans lowercase">
+                            <span className="text-[10px] font-normal text-slate-500 lowercase">
                               ({nodes.length} clearances)
                             </span>
-                          </h2>
+                          </h3>
                           <p className="text-[11px] text-slate-500 leading-tight">
                             {stage.description}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 text-[10px] text-slate-400 font-medium">
+                      <div className="text-[10px] text-slate-400 font-medium shrink-0">
                         <span>Stage {stage.order} of 7</span>
                       </div>
                     </div>
 
-                    {/* Nodes in this stage (Allowing parallel layout side-by-side) */}
+                    {/* Nodes in this stage */}
                     {hasNodes ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {nodes.map((node) => {
-                          const isSelected = selectedNodeCode === node.approval.code;
-                          const colorCfg = getNodeColorClasses(node.visualStatus, isSelected);
-                          const StatusIcon = colorCfg.icon;
+                          const item = node.approval;
+                          const isSelected = selectedNodeCode === item.code;
+                          const style = getNodeStyle(node.visualStatus, isSelected);
+                          const StatusIcon = style.icon;
 
                           return (
                             <div
-                              key={node.approval.code}
-                              onClick={() => setSelectedNodeCode(node.approval.code)}
-                              className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative ${colorCfg.container}`}
+                              key={item.code}
+                              onClick={() => setSelectedNodeCode(item.code)}
+                              className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer relative ${style.container}`}
                             >
-                              {/* Top Bar: Code + Status Badge */}
+                              {/* Top Bar: Stage & Status Badge */}
                               <div className="flex items-center justify-between gap-2 mb-2">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="font-mono font-bold text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
-                                    {node.approval.code}
+                                  <span className="font-mono text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-700">
+                                    {getStageLabel(item.stage)}
                                   </span>
                                   {node.canRunParallel && (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-50 text-cyan-800 border border-cyan-200">
+                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-cyan-50 text-cyan-800 border border-cyan-200">
                                       Parallel Allowed
                                     </span>
                                   )}
                                 </div>
 
                                 <div
-                                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${colorCfg.badge}`}
+                                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${style.badge}`}
                                 >
                                   <StatusIcon className="w-3 h-3" />
-                                  <span>{node.statusLabel}</span>
+                                  <span>{style.label}</span>
                                 </div>
                               </div>
 
-                              {/* Title & Authority */}
-                              <h3 className="font-bold text-xs text-slate-900 leading-snug line-clamp-2">
-                                {node.approval.title || node.approval.name}
-                              </h3>
+                              {/* Approval Name & Authority */}
+                              <h4 className="font-bold text-xs text-slate-900 leading-snug line-clamp-2">
+                                {item.title || item.name}
+                              </h4>
                               <p className="text-[10px] text-slate-500 mt-1 truncate">
-                                {node.approval.authority || node.approval.issuingAuthority}
+                                {item.issuingAuthority || item.authority}
                               </p>
 
-                              {/* Blocked or Attention Warning */}
-                              {node.isBlocked ? (
+                              {/* Blocked Warning */}
+                              {node.isBlocked && (
                                 <div className="mt-2.5 p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 text-[10px] space-y-0.5">
                                   <div className="flex items-center gap-1 font-bold text-rose-800">
-                                    <Lock className="w-3 h-3 text-rose-600" />
-                                    <span>Blocked by incomplete upstream:</span>
+                                    <Lock className="w-3 h-3 text-rose-600 shrink-0" />
+                                    <span>Blocked by upstream:</span>
                                   </div>
                                   <p className="truncate text-rose-950 font-medium">
                                     {node.blockedByNames.join(', ')}
                                   </p>
                                 </div>
-                              ) : node.visualStatus === 'attention_required' ? (
-                                <div className="mt-2.5 p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[10px] space-y-0.5">
-                                  <div className="flex items-center gap-1 font-bold text-amber-800">
-                                    <AlertTriangle className="w-3 h-3 text-amber-600" />
-                                    <span>Action required before filing / approval</span>
-                                  </div>
-                                </div>
-                              ) : null}
+                              )}
 
-                              {/* Bottom Footer: SLA + Dependencies info */}
+                              {/* Footer: Dependencies info */}
                               <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
-                                <span className="flex items-center gap-1">
-                                  <span>{node.incompletePrereqs.length + node.clearedPrereqs.length} Prereq(s)</span>
-                                  <span>&bull;</span>
-                                  <span>{node.outgoingDependents.length} Downstream</span>
+                                <span>
+                                  {node.incompletePrereqs.length + node.clearedPrereqs.length} Prereq(s) &bull; {node.outgoingDependents.length} Downstream
                                 </span>
-                                <span className="font-mono text-slate-500 font-semibold">
-                                  {node.approval.slaDays || 30}d SLA
+                                <span className="font-mono text-slate-600 font-semibold">
+                                  {item.slaDays || 30}d SLA
                                 </span>
                               </div>
                             </div>
@@ -525,8 +831,8 @@ export const DependencyMapView: React.FC = () => {
                     {/* Sequential Progression Down-Arrow */}
                     {!isLast && (
                       <div className="flex justify-center py-1">
-                        <div className="w-7 h-7 rounded-full bg-slate-200/80 text-slate-600 flex items-center justify-center shadow-2xs border border-slate-300/80">
-                          <ArrowDown className="w-4 h-4" />
+                        <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center shadow-2xs border border-slate-300">
+                          <ArrowDown className="w-3.5 h-3.5" />
                         </div>
                       </div>
                     )}
@@ -534,114 +840,15 @@ export const DependencyMapView: React.FC = () => {
                 );
               })}
             </div>
-          ) : (
-            /* ======================================================== */
-            /* VIEW 2: INTERACTIVE NETWORK DEPENDENCY CANVAS            */
-            /* ======================================================== */
-            <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-2xs space-y-4">
-              <div className="flex items-center justify-between text-xs text-slate-500 border-b border-slate-100 pb-3">
-                <span className="font-bold text-slate-700 flex items-center gap-1.5">
-                  <Network className="w-4 h-4 text-indigo-600" />
-                  <span>Statutory Node-Link Canvas (Topological Hierarchy)</span>
-                </span>
-                <span className="text-[11px] text-slate-400">
-                  Showing {filteredNodes.length} nodes &bull; Click node to inspect details
-                </span>
-              </div>
-
-              {/* Stage Progression Tier Columns */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                  {
-                    title: 'Tier 1: Pre-Establishment',
-                    subtitle: 'Land, Environmental & Baseline Clearances',
-                    keys: ['business_profile', 'project_land', 'environmental'] as RoadmapStageKey[],
-                  },
-                  {
-                    title: 'Tier 2: Pre-Construction',
-                    subtitle: 'Building Plans, Fire & Utility Connections',
-                    keys: ['factory_operational', 'fire_safety', 'utility'] as RoadmapStageKey[],
-                  },
-                  {
-                    title: 'Tier 3: Pre-Operation',
-                    subtitle: 'Operating Consents, Form 4 & FSSAI',
-                    keys: ['operational_compliance'] as RoadmapStageKey[],
-                  },
-                ].map((tier, idx) => {
-                  const tierNodes = filteredNodes.filter((n) => tier.keys.includes(n.stageKey));
-
-                  return (
-                    <div
-                      key={tier.title}
-                      className="p-3.5 rounded-xl bg-slate-50/70 border border-slate-200/80 flex flex-col space-y-3"
-                    >
-                      <div className="border-b border-slate-200 pb-2">
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-xs text-slate-900 uppercase tracking-wide">
-                            {tier.title}
-                          </span>
-                          <span className="text-[10px] font-mono font-bold bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-600">
-                            {tierNodes.length}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-0.5">{tier.subtitle}</p>
-                      </div>
-
-                      <div className="space-y-2.5 flex-1">
-                        {tierNodes.map((node) => {
-                          const isSelected = selectedNodeCode === node.approval.code;
-                          const colorCfg = getNodeColorClasses(node.visualStatus, isSelected);
-                          const StatusIcon = colorCfg.icon;
-
-                          return (
-                            <div
-                              key={node.approval.code}
-                              onClick={() => setSelectedNodeCode(node.approval.code)}
-                              className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${colorCfg.container}`}
-                            >
-                              <div className="flex items-center justify-between gap-1 mb-1">
-                                <span className="text-[10px] font-mono font-bold text-slate-600">
-                                  {node.approval.code}
-                                </span>
-                                <span
-                                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border flex items-center gap-0.5 ${colorCfg.badge}`}
-                                >
-                                  <StatusIcon className="w-2.5 h-2.5" />
-                                  <span>{node.statusLabel}</span>
-                                </span>
-                              </div>
-
-                              <h4 className="font-bold text-xs text-slate-900 leading-tight line-clamp-1">
-                                {node.approval.title || node.approval.name}
-                              </h4>
-                              <p className="text-[10px] text-slate-500 mt-0.5 truncate">
-                                {node.approval.authority || node.approval.issuingAuthority}
-                              </p>
-
-                              {node.isBlocked && (
-                                <div className="mt-1.5 flex items-center gap-1 text-[9px] text-rose-700 font-bold">
-                                  <Lock className="w-2.5 h-2.5" />
-                                  <span>Blocked by {node.blockedByCodes.join(', ')}</span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
           )}
         </div>
 
-        {/* Right: Comprehensive Detail Panel */}
+        {/* Right Side: Detail Drawer */}
         {selectedNode && (
           <div className="lg:col-span-5 xl:col-span-4">
             <RoadmapDetailPanel
               node={selectedNode}
-              onClose={() => setSelectedNodeCode('')}
+              onClose={() => setSelectedNodeCode(null)}
               onSelectNodeByCode={(code) => setSelectedNodeCode(code)}
             />
           </div>

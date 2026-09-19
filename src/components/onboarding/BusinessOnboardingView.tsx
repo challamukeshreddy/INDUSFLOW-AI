@@ -62,7 +62,7 @@ interface FormState {
 
 const DEMO_COMPANY: FormState = {
   // Step 1: Business Details
-  companyName: 'ABC Foods Manufacturing Pvt. Ltd.',
+  companyName: 'ABC Foods Manufacturing',
   businessType: 'Private Limited Company',
   industry: 'Food Manufacturing',
   subIndustry: 'Processed Foods, Fruit Pulp & Packaged Snacks',
@@ -465,7 +465,7 @@ export const BusinessOnboardingView: React.FC = () => {
               <Info className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="font-semibold text-indigo-950">
-                  Prototype Demo Company Loaded: <span className="underline">ABC Foods Manufacturing Pvt. Ltd.</span>
+                  Prototype Demo Company Loaded: <span className="underline">ABC Foods Manufacturing</span>
                 </p>
                 <p className="text-indigo-800 text-[11px] mt-0.5">
                   Pre-populated with Food Processing (Pune, MH), ₹10 Cr investment, 75 employees, and pre-establishment parameters for SIH26130 demonstration.
@@ -564,7 +564,7 @@ export const BusinessOnboardingView: React.FC = () => {
                 type="text"
                 value={formData.companyName}
                 onChange={(e) => handleFieldChange('companyName', e.target.value)}
-                placeholder="e.g., ABC Foods Manufacturing Pvt. Ltd."
+                placeholder="e.g., ABC Foods Manufacturing"
                 className={`w-full text-xs p-2.5 rounded-lg border bg-slate-50/50 focus:bg-white focus:outline-none transition-colors ${
                   errors.companyName ? 'border-rose-400 focus:border-rose-500 ring-1 ring-rose-300' : 'border-slate-300 focus:border-teal-500'
                 }`}

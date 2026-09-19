@@ -73,7 +73,7 @@ export const ProfileView: React.FC = () => {
     if (presetName === 'pharma') {
       setFormData((prev) => ({
         ...prev,
-        companyName: 'Apex BioPharma & Fine Chemicals Ltd.',
+        companyName: 'Apex BioPharma & Fine Chemicals',
         sector: 'pharma',
         cpcbCategory: 'Red',
         investmentInrCrores: 38.5,
@@ -90,7 +90,7 @@ export const ProfileView: React.FC = () => {
     } else if (presetName === 'electronics') {
       setFormData((prev) => ({
         ...prev,
-        companyName: 'NexGen Microtronics India Pvt Ltd',
+        companyName: 'NexGen Microtronics India',
         sector: 'electronics',
         cpcbCategory: 'Green',
         investmentInrCrores: 18.0,
@@ -124,7 +124,7 @@ export const ProfileView: React.FC = () => {
     } else if (presetName === 'chemical') {
       setFormData((prev) => ({
         ...prev,
-        companyName: 'Synthetica Speciality Polymers LLP',
+        companyName: 'Synthetica Speciality Polymers',
         sector: 'chemicals',
         cpcbCategory: 'Red',
         investmentInrCrores: 65.0,

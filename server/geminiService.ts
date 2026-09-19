@@ -37,7 +37,7 @@ async function callGeminiWithResilience(
   const ai = getGeminiClient();
   if (!ai) return null;
 
-  const modelCascade = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+  const modelCascade = ['gemini-3.1-flash-lite', 'gemini-flash-latest', 'gemini-3.8-flash'];
 
   for (const model of modelCascade) {
     for (let attempt = 1; attempt <= 2; attempt++) {

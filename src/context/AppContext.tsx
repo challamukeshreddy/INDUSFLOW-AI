@@ -40,6 +40,17 @@ export interface GeneratedApprovalPlan {
   dependencyEdges: ApprovalDependencyEdge[];
 }
 
+export interface CompanyPresetItem {
+  id: string;
+  name: string;
+  sectorLabel: string;
+  location: string;
+  investment: string;
+  workforce: number;
+  stage: string;
+  cpcbCategory: string;
+}
+
 interface AppContextType {
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
@@ -57,6 +68,17 @@ interface AppContextType {
   setSelectedApproval: (approval: ApprovalItem | null) => void;
   selectedDocument: UploadedDocument | null;
   setSelectedDocument: (doc: UploadedDocument | null) => void;
+  companies: CompanyPresetItem[];
+  currentCompanyId: string;
+  switchCompany: (presetId: string) => Promise<void>;
+  loadDemoCompany: () => Promise<void>;
+  isCopilotOpen: boolean;
+  copilotInitialPrompt: string;
+  openCopilot: (prompt?: string) => void;
+  closeCopilot: () => void;
+  isDemoGuideOpen: boolean;
+  toggleDemoGuide: () => void;
+  closeDemoGuide: () => void;
   updateProfile: (updatedFields: Partial<BusinessProfile>) => Promise<void>;
   generateApprovalPlan: (profileUpdates?: Partial<BusinessProfile>) => Promise<GeneratedApprovalPlan | null>;
   updateApprovalStatus: (code: string, updates: Partial<ApprovalItem>) => Promise<void>;
@@ -84,6 +106,7 @@ interface AppContextType {
   preValidateDocument: (docId: string, snippet?: string) => Promise<void>;
   sendChatMessage: (message: string) => Promise<ChatMessage | null>;
   askAssistant: (message: string) => Promise<ChatMessage | null>;
+  clearChat: () => Promise<void>;
   refreshAllData: () => Promise<void>;
   schemeApplicationStatuses: Record<string, SchemeApplicationStatus>;
   updateSchemeApplicationStatus: (schemeId: string, status: SchemeApplicationStatus) => void;
@@ -105,6 +128,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [generatedPlan, setGeneratedPlan] = useState<GeneratedApprovalPlan | null>(null);
   const [selectedApproval, setSelectedApproval] = useState<ApprovalItem | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<UploadedDocument | null>(null);
+
+  // Multi-Company Presets & Demo state
+  const [companies, setCompanies] = useState<CompanyPresetItem[]>([]);
+  const [currentCompanyId, setCurrentCompanyId] = useState<string>('abc_foods');
+
+  // Persistent Copilot Drawer state
+  const [isCopilotOpen, setIsCopilotOpen] = useState<boolean>(false);
+  const [copilotInitialPrompt, setCopilotInitialPrompt] = useState<string>('');
+
+  // 12-Step Hackathon Demo Guide state
+  const [isDemoGuideOpen, setIsDemoGuideOpen] = useState<boolean>(false);
+
+  const openCopilot = useCallback((prompt?: string) => {
+    if (prompt) setCopilotInitialPrompt(prompt);
+    setIsCopilotOpen(true);
+  }, []);
+
+  const closeCopilot = useCallback(() => {
+    setIsCopilotOpen(false);
+  }, []);
+
+  const toggleDemoGuide = useCallback(() => {
+    setIsDemoGuideOpen((prev) => !prev);
+  }, []);
+
+  const closeDemoGuide = useCallback(() => {
+    setIsDemoGuideOpen(false);
+  }, []);
+
   const [schemeApplicationStatuses, setSchemeApplicationStatuses] = useState<Record<string, SchemeApplicationStatus>>(() => {
     try {
       const saved = localStorage.getItem('indusflow_scheme_statuses');
@@ -133,7 +185,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const refreshAllData = useCallback(async () => {
     try {
-      const [profileRes, approvalsRes, depsRes, docsRes, risksRes, actionsRes, chatRes] =
+      const [profileRes, approvalsRes, depsRes, docsRes, risksRes, actionsRes, chatRes, companiesRes] =
         await Promise.all([
           fetch('/api/profile').then((r) => r.json()),
           fetch('/api/approvals').then((r) => r.json()),
@@ -142,6 +194,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetch('/api/risks').then((r) => r.json()),
           fetch('/api/next-actions').then((r) => r.json()),
           fetch('/api/assistant/history').then((r) => r.json()),
+          fetch('/api/companies').then((r) => r.json()).catch(() => ({ success: false })),
         ]);
 
       if (profileRes.success) setProfile(profileRes.profile);
@@ -151,12 +204,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (risksRes.success) setAlerts(risksRes.alerts);
       if (actionsRes.success) setNextActions(actionsRes.actions);
       if (chatRes.success) setChatHistory(chatRes.history);
+      if (companiesRes && companiesRes.success) {
+        setCompanies(companiesRes.companies || []);
+        if (companiesRes.currentPresetId) {
+          setCurrentCompanyId(companiesRes.currentPresetId);
+        }
+      }
     } catch (err) {
       console.error('Failed to load INDUSFLOW data:', err);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const switchCompany = async (presetId: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/profile/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presetId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCurrentCompanyId(presetId);
+        await refreshAllData();
+      }
+    } catch (err) {
+      console.error('Failed to switch company:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDemoCompany = async () => {
+    await switchCompany('abc_foods');
+  };
 
   useEffect(() => {
     refreshAllData();
@@ -371,6 +454,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return sendChatMessage(message);
   };
 
+  const clearChat = async () => {
+    try {
+      await fetch('/api/assistant/clear', { method: 'POST' });
+    } catch (err) {
+      console.error('Failed to clear chat on server:', err);
+    }
+    setChatHistory([]);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -390,6 +482,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedApproval,
         selectedDocument,
         setSelectedDocument,
+        companies,
+        currentCompanyId,
+        switchCompany,
+        loadDemoCompany,
+        isCopilotOpen,
+        copilotInitialPrompt,
+        openCopilot,
+        closeCopilot,
+        isDemoGuideOpen,
+        toggleDemoGuide,
+        closeDemoGuide,
         updateProfile,
         generateApprovalPlan,
         updateApprovalStatus,
@@ -399,6 +502,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         preValidateDocument,
         sendChatMessage,
         askAssistant,
+        clearChat,
         refreshAllData,
         schemeApplicationStatuses,
         updateSchemeApplicationStatus,

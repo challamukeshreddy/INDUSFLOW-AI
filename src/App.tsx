@@ -13,12 +13,14 @@ import { BottleneckRadarView } from './components/risks/BottleneckRadarView.js';
 import { AssistantView } from './components/assistant/AssistantView.js';
 import { GovernmentSchemesView } from './components/schemes/GovernmentSchemesView.js';
 import { DepartmentAnalyticsView } from './components/department/DepartmentAnalyticsView.js';
-import { ShieldAlert, Sparkles, Building2, HelpCircle } from 'lucide-react';
+import { HackathonDemoGuide } from './components/common/HackathonDemoGuide.js';
+import { CopilotSidePanel } from './components/assistant/CopilotSidePanel.js';
+import { ShieldAlert, Sparkles, Building2, HelpCircle, Bot } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-  const { activeTab, isLoading } = useApp();
+  const { activeTab, loading, isCopilotOpen, openCopilot, closeCopilot } = useApp();
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
         <div className="bg-white p-6 rounded-2xl shadow-md border border-slate-200 text-center max-w-sm w-full space-y-3">
@@ -33,8 +35,9 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
+    <div className="min-h-screen bg-slate-100 text-slate-900 flex flex-col font-sans selection:bg-teal-500 selection:text-white relative">
       <Header />
+      <HackathonDemoGuide />
       <Navigation />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -48,8 +51,30 @@ const AppContent: React.FC = () => {
         {activeTab === 'risks' && <BottleneckRadarView />}
         {activeTab === 'schemes' && <GovernmentSchemesView />}
         {activeTab === 'department' && <DepartmentAnalyticsView />}
-        {activeTab === 'assistant' && <AssistantView />}
+        {activeTab === 'assistant' && <DashboardView />}
       </main>
+
+      {/* Eye-Catching Compact Floating AI Copilot Launcher at Bottom */}
+      {!isCopilotOpen && (
+        <button
+          id="persistent-floating-copilot-btn"
+          onClick={() => openCopilot('What should I do next?')}
+          className="fixed bottom-5 right-5 z-40 flex items-center gap-2.5 px-3.5 py-2 rounded-full bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-600 hover:from-teal-600 hover:via-teal-500 hover:to-emerald-500 text-white font-bold text-xs shadow-lg shadow-teal-950/30 hover:shadow-teal-500/40 border border-teal-300/40 ring-2 ring-teal-400/20 hover:ring-teal-300/40 transition-all duration-200 hover:scale-105 active:scale-95 cursor-pointer group select-none"
+          title="Open INDUSFLOW AI Regulatory Copilot"
+        >
+          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center border border-white/30 group-hover:bg-white/30 transition-colors shrink-0">
+            <Bot className="w-3.5 h-3.5 text-white" />
+          </div>
+          <span className="tracking-wide">Ask AI Copilot</span>
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-80"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-300"></span>
+          </span>
+        </button>
+      )}
+
+      {/* Persistent Global Copilot Side Panel */}
+      <CopilotSidePanel />
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 mt-12 py-6 text-xs text-slate-500">

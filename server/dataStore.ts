@@ -1,283 +1,465 @@
 import { BusinessProfile, ApprovalItem, UploadedDocument, ChatMessage } from '../src/types/index.js';
 import { evaluateApplicableApprovals } from './rulesEngine.js';
 
+export interface BusinessPreset {
+  id: string;
+  name: string;
+  sectorLabel: string;
+  location: string;
+  investment: string;
+  workforce: number;
+  stage: string;
+  cpcbCategory: string;
+  profile: BusinessProfile;
+  approvalStates: [string, Partial<ApprovalItem>][];
+  documents: UploadedDocument[];
+  initialChat: ChatMessage[];
+}
+
 export class IndusflowDataStore {
   private profile: BusinessProfile;
   private approvalsState: Map<string, Partial<ApprovalItem>> = new Map();
   private documents: UploadedDocument[] = [];
   private chatHistory: ChatMessage[] = [];
+  private currentPresetId: string = 'abc_foods';
+
+  private presets: Record<string, BusinessPreset> = {
+    abc_foods: {
+      id: 'abc_foods',
+      name: 'ABC Foods Manufacturing',
+      sectorLabel: 'Food Manufacturing (Processing)',
+      location: 'Pune, Maharashtra',
+      investment: '₹10.0 Crore',
+      workforce: 75,
+      stage: 'Pre-establishment',
+      cpcbCategory: 'Orange',
+      profile: {
+        id: 'proj_abc_foods_01',
+        companyName: 'ABC Foods Manufacturing',
+        cinOrUdyam: 'U15400MH2024PTC221940',
+        pan: 'AAACB4912L',
+        gstin: '27AAACB4912L1Z8',
+        sector: 'food_processing',
+        industry: 'Food Manufacturing',
+        subIndustry: 'Processed Foods, Fruit Pulp & Packaged Snacks',
+        state: 'Maharashtra',
+        district: 'Pune',
+        city: 'Pune',
+        industrialArea: 'Chakan Industrial Area, MIDC Phase II',
+        landType: 'designated_industrial_estate',
+        landStatus: 'Industrial Land',
+        landAreaAcres: 3.2,
+        builtUpAreaSqMeters: 3500,
+        investmentScale: 'medium',
+        investmentInrCrores: 10.0,
+        cpcbCategory: 'Orange',
+        workforceCount: 75,
+        powerRequirementKVA: 200,
+        waterRequirementKLD: 35,
+        waterSource: 'industrial_pipe',
+        hasBoiler: true,
+        boilerCapacityTph: 2,
+        hasHazardousChemicals: false,
+        hazardousDetails: 'No hazardous chemicals. Food grade sanitizing agents stored safely.',
+        hasEffluentDischarge: true,
+        effluentQuantityKLD: 22,
+        dgSetCapacityKVA: 250,
+        projectStage: 'pre_establishment',
+        targetCommissioningDate: '2027-04-30',
+        unitType: 'New Unit',
+        projectType: 'Greenfield (New Unit)',
+        manufacturingActivity: 'Processing, pasteurization, and aseptic packaging of ready-to-eat fruit pulp, baked extruded snacks, and processed food products.',
+        isDemoData: true,
+      },
+      approvalStates: [
+        ['SIDC_LAND_ALLOTMENT', { status: 'approved', daysElapsed: 18, submissionDate: '2026-08-01', approvedDate: '2026-08-19' }],
+        ['SPCB_CTE', {
+          status: 'query_raised',
+          daysElapsed: 28,
+          submissionDate: '2026-08-20',
+          queryDetails: {
+            queryText: 'Discrepancy detected between Water Balance Diagram in DPR (35 KLD) and ETP hydraulic capacity in application form (22 KLD wash water vs 30 KLD ETP). Please clarify grease trap sizing and RO permeate recycling ratio.',
+            raisedDate: '2026-09-06',
+            deadlineDate: '2026-09-28',
+            departmentOfficer: 'Shri R. Kulkarni (Sub-Regional Officer, MPCB Pune-II)',
+            urgency: 'critical',
+          },
+        }],
+        ['DISCOM_POWER_SANCTION', { status: 'in_review', daysElapsed: 14, submissionDate: '2026-09-02' }],
+        ['FIRE_NOC_PROVISIONAL', { status: 'documents_pending', daysElapsed: 6, submissionDate: '2026-09-10' }],
+        ['FACTORY_PLAN_APPROVAL', { status: 'not_started', daysElapsed: 0 }],
+        ['FSSAI_CENTRAL_LIC', { status: 'not_started', daysElapsed: 0 }],
+        ['BOILER_REGISTRATION', { status: 'not_started', daysElapsed: 0 }],
+        ['SPCB_CTO', { status: 'not_started', daysElapsed: 0 }],
+        ['FACTORY_LICENSE', { status: 'not_started', daysElapsed: 0 }],
+        ['FIRE_NOC_FINAL', { status: 'not_started', daysElapsed: 0 }],
+      ],
+      documents: [
+        {
+          id: 'doc_abc_01',
+          approvalCode: 'SIDC_LAND_ALLOTMENT',
+          approvalTitle: 'Industrial Land Allotment & Possession Certificate',
+          documentTypeCode: 'COMPANY_ID',
+          documentName: 'Certificate of Incorporation & Udyam Registration',
+          fileName: 'ABCFoods_ROC_Udyam_MH.pdf',
+          fileSizeKb: 1120,
+          uploadedAt: '2026-08-10 11:15',
+          status: 'VERIFIED',
+          expiryDate: 'N/A (Perpetual)',
+          issues: [],
+          validationStatus: 'passed',
+          validationResult: {
+            score: 96,
+            status: 'passed',
+            verifiedFields: [
+              { field: 'Company Name', extractedValue: 'ABC Foods Manufacturing', profileValue: 'ABC Foods Manufacturing', isMatch: true },
+              { field: 'Registered Location', extractedValue: 'Plot 42-B, Chakan MIDC, Pune', profileValue: 'Chakan Industrial Area, MIDC Phase II', isMatch: true },
+              { field: 'Industry Sector', extractedValue: 'Food Processing (NIC Code 10)', profileValue: 'Food Manufacturing', isMatch: true },
+            ],
+            criticalDiscrepancies: [],
+            advisoryNotes: ['Corporate identity and registered office in Pune verified against MCA and Udyam databases.'],
+            geminiValidated: true,
+            scanTimestamp: '2026-08-10 11:18',
+          },
+        },
+        {
+          id: 'doc_abc_02',
+          approvalCode: 'SPCB_CTE',
+          approvalTitle: 'Consent to Establish (CTE / NOC)',
+          documentTypeCode: 'WATER_BALANCE',
+          documentName: 'Water Balance & Food Effluent Treatment Plan',
+          fileName: 'ABCFoods_ETP_Scheme_Draft.pdf',
+          fileSizeKb: 2150,
+          uploadedAt: '2026-09-08 16:20',
+          status: 'NEEDS CORRECTION',
+          expiryDate: '2027-09-08',
+          issues: [
+            'Discrepancy: Fresh water intake listed as 35 KLD, but wash water effluent shows 22 KLD with unspecified CIP recovery.',
+            'Oil & grease trap design requires explicit retention time calculation for bakery and dairy lines per CPCB norms.',
+          ],
+          validationStatus: 'mismatch',
+          validationResult: {
+            score: 64,
+            status: 'mismatch',
+            verifiedFields: [
+              { field: 'Unit Location', extractedValue: 'Chakan MIDC Phase II, Pune', profileValue: 'Chakan Industrial Area, MIDC Phase II', isMatch: true },
+              { field: 'Fresh Water Intake', extractedValue: '35.0 KLD', profileValue: '35.0 KLD', isMatch: true },
+              { field: 'Industrial Effluent Generation', extractedValue: '22.0 KLD', profileValue: '22.0 KLD', isMatch: true },
+              { field: 'CPCB Pollution Category', extractedValue: 'Orange Category (Food Processing)', profileValue: 'Orange', isMatch: true },
+            ],
+            criticalDiscrepancies: [
+              'Discrepancy: Fresh water intake listed as 35 KLD, but wash water effluent shows 22 KLD with unspecified CIP recovery.',
+              'Oil & grease trap design requires explicit retention time calculation for bakery and dairy lines per CPCB norms.',
+            ],
+            advisoryNotes: [
+              'Update hydraulic mass balance with separate clean-in-place (CIP) neutralization stream before resubmission to MPCB.',
+            ],
+            geminiValidated: true,
+            scanTimestamp: '2026-09-08 16:25',
+          },
+        },
+        {
+          id: 'doc_abc_03',
+          approvalCode: 'FACTORY_PLAN_APPROVAL',
+          approvalTitle: 'Factory Building Plan Approval (DISH)',
+          documentTypeCode: 'FACTORY_LAYOUT',
+          documentName: 'Factory Machine Layout & Architectural Plan',
+          fileName: 'ABCFoods_Plant_Layout_75workers.pdf',
+          fileSizeKb: 3450,
+          uploadedAt: '2026-09-12 14:10',
+          status: 'UPLOADED',
+          expiryDate: '2029-09-12',
+          issues: [],
+          validationStatus: 'unvalidated',
+        },
+      ],
+      initialChat: [
+        {
+          id: 'msg_abc_welcome',
+          sender: 'assistant',
+          text: 'Welcome to INDUSFLOW AI! I am actively tracking compliance for **ABC Foods Manufacturing** (Food Processing unit in Pune, Maharashtra).\n\n**Immediate Priority:** MPCB has raised a clarification query on your **Consent to Establish (CTE)** regarding water balance and grease trap sizing (Deadline: September 28). Resolving this unblocks your Provisional Fire NOC and Factory Plan Approval.',
+          timestamp: new Date().toISOString(),
+          recommendations: [
+            'Respond to MPCB Query on Water Balance & ETP Design before Sep 28',
+            'Run AI Pre-Validation on your Factory Machine Layout Plan',
+            'Submit Provisional Fire Safety NOC dossier to MIDC Fire Brigade',
+          ],
+          relevantApprovals: ['SPCB_CTE', 'FIRE_NOC_PROVISIONAL', 'FACTORY_PLAN_APPROVAL'],
+        },
+      ],
+    },
+
+    sunrise_agro: {
+      id: 'sunrise_agro',
+      name: 'Sunrise Agro Products',
+      sectorLabel: 'Agro Processing & Dehydration',
+      location: 'Nashik, Maharashtra',
+      investment: '₹3.5 Crore',
+      workforce: 30,
+      stage: 'Pre-construction',
+      cpcbCategory: 'Green',
+      profile: {
+        id: 'proj_sunrise_agro_02',
+        companyName: 'Sunrise Agro Products',
+        cinOrUdyam: 'UDYAM-MH-26-0048192',
+        pan: 'AAACS6123M',
+        gstin: '27AAACS6123M1Z2',
+        sector: 'food_processing',
+        industry: 'Agro Processing Unit',
+        subIndustry: 'Solar Dehydrated Fruits, Spices & Grain Cleaning',
+        state: 'Maharashtra',
+        district: 'Nashik',
+        city: 'Nashik',
+        industrialArea: 'MIDC Ambad Industrial Estate',
+        landType: 'designated_industrial_estate',
+        landStatus: 'Industrial Land',
+        landAreaAcres: 1.5,
+        builtUpAreaSqMeters: 1400,
+        investmentScale: 'small',
+        investmentInrCrores: 3.5,
+        cpcbCategory: 'Green',
+        workforceCount: 30,
+        powerRequirementKVA: 85,
+        waterRequirementKLD: 8,
+        waterSource: 'industrial_pipe',
+        hasBoiler: false,
+        hasHazardousChemicals: false,
+        hasEffluentDischarge: false,
+        effluentQuantityKLD: 0,
+        dgSetCapacityKVA: 65,
+        projectStage: 'pre_construction',
+        targetCommissioningDate: '2026-12-15',
+        unitType: 'New Unit',
+        projectType: 'Greenfield',
+        isDemoData: false,
+      },
+      approvalStates: [
+        ['SIDC_LAND_ALLOTMENT', { status: 'approved', daysElapsed: 15 }],
+        ['SPCB_CTE', { status: 'approved', daysElapsed: 22 }],
+        ['DISCOM_POWER_SANCTION', { status: 'approved', daysElapsed: 19 }],
+        ['FACTORY_PLAN_APPROVAL', { status: 'in_review', daysElapsed: 12 }],
+        ['FSSAI_CENTRAL_LIC', { status: 'not_started', daysElapsed: 0 }],
+        ['FACTORY_LICENSE', { status: 'not_started', daysElapsed: 0 }],
+      ],
+      documents: [
+        {
+          id: 'doc_sun_01',
+          approvalCode: 'SPCB_CTE',
+          approvalTitle: 'Consent to Establish (CTE)',
+          documentTypeCode: 'PROCESS_FLOW',
+          documentName: 'Green Category Dry Processing Scheme',
+          fileName: 'Sunrise_Process_Flow.pdf',
+          fileSizeKb: 890,
+          uploadedAt: '2026-07-15 10:00',
+          status: 'VERIFIED',
+          validationStatus: 'passed',
+        },
+      ],
+      initialChat: [
+        {
+          id: 'msg_sun_01',
+          sender: 'assistant',
+          text: 'Active project: **Sunrise Agro Products** (Green Category unit in Nashik). Your CTE is approved and Factory Plan Approval is under review with DISH Nashik.',
+          timestamp: new Date().toISOString(),
+          recommendations: ['Follow up with DISH on Factory Plan Approval', 'Prepare FSSAI State License application'],
+        },
+      ],
+    },
+
+    vortexa_chem: {
+      id: 'vortexa_chem',
+      name: 'Vortexa Chemicals',
+      sectorLabel: 'Specialty Chemicals & Polymers',
+      location: 'Dahej, Gujarat',
+      investment: '₹45.0 Crore',
+      workforce: 180,
+      stage: 'Pre-establishment',
+      cpcbCategory: 'Red',
+      profile: {
+        id: 'proj_vortexa_chem_03',
+        companyName: 'Vortexa Chemicals',
+        cinOrUdyam: 'U24100GJ2023PLC091823',
+        pan: 'AAACV7712N',
+        gstin: '24AAACV7712N1Z4',
+        sector: 'chemicals',
+        industry: 'Chemical Manufacturing',
+        subIndustry: 'Organic Specialty Polymers & Resin Formulations',
+        state: 'Gujarat',
+        district: 'Bharuch',
+        city: 'Dahej',
+        industrialArea: 'GIDC Dahej Chemical Zone (PCPIR)',
+        landType: 'designated_industrial_estate',
+        landStatus: 'Industrial Land',
+        landAreaAcres: 8.0,
+        builtUpAreaSqMeters: 8500,
+        investmentScale: 'medium',
+        investmentInrCrores: 45.0,
+        cpcbCategory: 'Red',
+        workforceCount: 180,
+        powerRequirementKVA: 800,
+        waterRequirementKLD: 120,
+        waterSource: 'industrial_pipe',
+        hasBoiler: true,
+        boilerCapacityTph: 6,
+        hasHazardousChemicals: true,
+        hazardousDetails: 'Benzene, Ethylene Dichloride, Styrene Monomer',
+        hasEffluentDischarge: true,
+        effluentQuantityKLD: 75,
+        dgSetCapacityKVA: 1000,
+        projectStage: 'pre_establishment',
+        targetCommissioningDate: '2027-08-31',
+        unitType: 'New Unit',
+        projectType: 'Greenfield',
+        isDemoData: false,
+      },
+      approvalStates: [
+        ['SIDC_LAND_ALLOTMENT', { status: 'approved', daysElapsed: 30 }],
+        ['MOEF_EC', { status: 'in_review', daysElapsed: 75 }],
+        ['SPCB_CTE', { status: 'documents_pending', daysElapsed: 10 }],
+        ['PESO_EXPLOSIVES_LIC', { status: 'in_review', daysElapsed: 40 }],
+        ['FIRE_NOC_PROVISIONAL', { status: 'in_review', daysElapsed: 25 }],
+      ],
+      documents: [
+        {
+          id: 'doc_vor_01',
+          approvalCode: 'MOEF_EC',
+          approvalTitle: 'Prior Environmental Clearance (EC)',
+          documentTypeCode: 'EIA_REPORT',
+          documentName: 'EIA Baseline Monitoring & EMP Study',
+          fileName: 'Vortexa_EIA_Report_Dahej.pdf',
+          fileSizeKb: 8500,
+          uploadedAt: '2026-06-20 14:00',
+          status: 'VERIFIED',
+          validationStatus: 'passed',
+        },
+      ],
+      initialChat: [
+        {
+          id: 'msg_vor_01',
+          sender: 'assistant',
+          text: 'Active project: **Vortexa Chemicals** (Red Category chemical manufacturing in GIDC Dahej, Gujarat). Prior Environmental Clearance (MoEF&CC) is currently on Day 75 of 105 SLA.',
+          timestamp: new Date().toISOString(),
+          recommendations: ['Track SEAC scrutiny meeting date for EC', 'Complete HAZOP study documentation for PESO'],
+        },
+      ],
+    },
+
+    apex_biopharma: {
+      id: 'apex_biopharma',
+      name: 'Apex BioPharma & Fine Chemicals',
+      sectorLabel: 'Active Pharmaceutical Ingredients (API)',
+      location: 'Palghar, Maharashtra',
+      investment: '₹38.5 Crore',
+      workforce: 85,
+      stage: 'Pre-construction',
+      cpcbCategory: 'Red',
+      profile: {
+        id: 'proj_apex_biopharma_01',
+        companyName: 'Apex BioPharma & Fine Chemicals',
+        cinOrUdyam: 'U24232MH2024PLC389120',
+        pan: 'AAACA9812K',
+        gstin: '27AAACA9812K1Z5',
+        sector: 'pharma',
+        state: 'Maharashtra',
+        district: 'Palghar',
+        industrialArea: 'MIDC Tarapur Chemical Zone',
+        landType: 'designated_industrial_estate',
+        landAreaAcres: 5.5,
+        builtUpAreaSqMeters: 6200,
+        investmentScale: 'medium',
+        investmentInrCrores: 38.5,
+        cpcbCategory: 'Red',
+        workforceCount: 85,
+        powerRequirementKVA: 450,
+        waterRequirementKLD: 65,
+        waterSource: 'industrial_pipe',
+        hasBoiler: true,
+        boilerCapacityTph: 4,
+        hasHazardousChemicals: true,
+        hazardousDetails: 'Toluene, Isopropanol, Dichloromethane (DCM), Hydrogen Gas Cylinders',
+        hasEffluentDischarge: true,
+        effluentQuantityKLD: 42,
+        dgSetCapacityKVA: 500,
+        projectStage: 'pre_construction',
+        targetCommissioningDate: '2026-11-30',
+        isDemoData: false,
+      },
+      approvalStates: [
+        ['SIDC_LAND_ALLOTMENT', { status: 'approved', daysElapsed: 22 }],
+        ['MOEF_EC', { status: 'in_review', daysElapsed: 88 }],
+        ['SPCB_CTE', {
+          status: 'query_raised',
+          daysElapsed: 44,
+          queryDetails: {
+            queryText: 'Discrepancy observed between Water Balance Diagram in DPR (45 KLD) and ZLD ETP capacity in application form (65 KLD). Provide revised Zero Liquid Discharge (ZLD) treatment design.',
+            raisedDate: '2026-08-28',
+            deadlineDate: '2026-09-22',
+            departmentOfficer: 'Shri R. V. Kulkarni, Sub-Regional Officer (MPCB Tarapur)',
+            urgency: 'critical',
+          },
+        }],
+        ['FIRE_NOC_PROVISIONAL', { status: 'documents_pending', daysElapsed: 12 }],
+      ],
+      documents: [
+        {
+          id: 'doc_apex_01',
+          approvalCode: 'SIDC_LAND_ALLOTMENT',
+          approvalTitle: 'Industrial Land Allotment',
+          documentTypeCode: 'COMPANY_ID',
+          documentName: 'Certificate of Incorporation & GSTIN',
+          fileName: 'ApexBio_ROC_GSTIN_Verified.pdf',
+          fileSizeKb: 1420,
+          uploadedAt: '2026-06-12 10:30',
+          status: 'VERIFIED',
+          validationStatus: 'passed',
+        },
+      ],
+      initialChat: [
+        {
+          id: 'msg_apex_01',
+          sender: 'assistant',
+          text: 'Active project: **Apex BioPharma** in MIDC Tarapur. High priority query on Consent to Establish (CTE) water balance due September 22.',
+          timestamp: new Date().toISOString(),
+          recommendations: ['Submit revised ZLD ETP design to MPCB', 'Complete Fire Escape plan for Provisional Fire NOC'],
+        },
+      ],
+    },
+  };
 
   constructor() {
-    // Realistic prototype profile: Active pharmaceutical ingredient (API) unit
-    this.profile = {
-      id: 'proj_apex_biopharma_01',
-      companyName: 'Apex BioPharma & Fine Chemicals Ltd.',
-      cinOrUdyam: 'U24232MH2024PLC389120',
-      pan: 'AAACA9812K',
-      gstin: '27AAACA9812K1Z5',
-      sector: 'pharma',
-      state: 'Maharashtra',
-      district: 'Palghar',
-      industrialArea: 'MIDC Tarapur Chemical Zone',
-      landType: 'designated_industrial_estate',
-      landAreaAcres: 5.5,
-      builtUpAreaSqMeters: 6200,
-      investmentScale: 'medium',
-      investmentInrCrores: 38.5,
-      cpcbCategory: 'Red',
-      workforceCount: 85,
-      powerRequirementKVA: 450,
-      waterRequirementKLD: 65,
-      waterSource: 'industrial_pipe',
-      hasBoiler: true,
-      boilerCapacityTph: 4,
-      hasHazardousChemicals: true,
-      hazardousDetails: 'Toluene, Isopropanol, Dichloromethane (DCM), Hydrogen Gas Cylinders',
-      hasEffluentDischarge: true,
-      effluentQuantityKLD: 42,
-      dgSetCapacityKVA: 500,
-      projectStage: 'pre_construction',
-      targetCommissioningDate: '2026-11-30',
-    };
+    this.loadPreset('abc_foods');
+  }
 
-    // Seed realistic statuses across lifecycle
-    this.approvalsState.set('SIDC_LAND_ALLOTMENT', {
-      status: 'approved',
-      daysElapsed: 22,
-      submissionDate: '2026-06-10',
-      approvedDate: '2026-07-02',
-    });
+  public getPresetList() {
+    return Object.values(this.presets).map((p) => ({
+      id: p.id,
+      name: p.name,
+      sectorLabel: p.sectorLabel,
+      location: p.location,
+      investment: p.investment,
+      workforce: p.workforce,
+      stage: p.stage,
+      cpcbCategory: p.cpcbCategory,
+    }));
+  }
 
-    this.approvalsState.set('MOEF_EC', {
-      status: 'in_review',
-      daysElapsed: 88,
-      submissionDate: '2026-07-08',
-    });
+  public getCurrentPresetId(): string {
+    return this.currentPresetId;
+  }
 
-    this.approvalsState.set('SPCB_CTE', {
-      status: 'query_raised',
-      daysElapsed: 44,
-      submissionDate: '2026-07-20',
-      queryDetails: {
-        queryText: 'Discrepancy observed between Water Balance Diagram in DPR (45 KLD) and ZLD ETP capacity in application form (65 KLD). Provide revised Zero Liquid Discharge (ZLD) treatment design and RO permeate recycling schematic.',
-        raisedDate: '2026-08-28',
-        deadlineDate: '2026-09-22',
-        departmentOfficer: 'Er. V. Deshmukh (Sub-Regional Officer, MPCB Palghar)',
-        urgency: 'critical',
-      },
-    });
+  public loadPreset(presetId: string): boolean {
+    const preset = this.presets[presetId];
+    if (!preset) return false;
 
-    this.approvalsState.set('FIRE_NOC_PROVISIONAL', {
-      status: 'documents_pending',
-      daysElapsed: 12,
-      submissionDate: '2026-08-15',
-    });
-
-    this.approvalsState.set('FACTORY_PLAN_APPROVAL', {
-      status: 'not_started',
-      daysElapsed: 0,
-    });
-
-    this.approvalsState.set('DISCOM_POWER_SANCTION', {
-      status: 'in_review',
-      daysElapsed: 38,
-      submissionDate: '2026-08-01',
-    });
-
-    this.approvalsState.set('BOILER_REGISTRATION', {
-      status: 'not_started',
-      daysElapsed: 0,
-    });
-
-    this.approvalsState.set('PESO_EXPLOSIVES_LIC', {
-      status: 'not_started',
-      daysElapsed: 0,
-    });
-
-    this.approvalsState.set('FIRE_NOC_FINAL', {
-      status: 'not_started',
-      daysElapsed: 0,
-    });
-
-    this.approvalsState.set('SPCB_CTO', {
-      status: 'not_started',
-      daysElapsed: 0,
-    });
-
-    this.approvalsState.set('FACTORY_LICENSE', {
-      status: 'not_started',
-      daysElapsed: 0,
-    });
-
-    // Seed sample uploaded documents with validation results
-    this.documents = [
-      {
-        id: 'doc_up_01',
-        approvalCode: 'SIDC_LAND_ALLOTMENT',
-        approvalTitle: 'Industrial Land Allotment & Possession Certificate',
-        documentTypeCode: 'COMPANY_ID',
-        documentName: 'Certificate of Incorporation & GSTIN',
-        fileName: 'ApexBio_ROC_GSTIN_Verified.pdf',
-        fileSizeKb: 1420,
-        uploadedAt: '2026-06-12 10:30',
-        status: 'VERIFIED',
-        expiryDate: 'N/A (Perpetual)',
-        issues: [],
-        validationStatus: 'passed',
-        validationResult: {
-          score: 98,
-          status: 'passed',
-          verifiedFields: [
-            { field: 'Company Name', extractedValue: 'Apex BioPharma & Fine Chemicals Ltd.', profileValue: 'Apex BioPharma & Fine Chemicals Ltd.', isMatch: true },
-            { field: 'CIN', extractedValue: 'U24232MH2024PLC389120', profileValue: 'U24232MH2024PLC389120', isMatch: true },
-            { field: 'GSTIN', extractedValue: '27AAACA9812K1Z5', profileValue: '27AAACA9812K1Z5', isMatch: true },
-            { field: 'State Jurisdiction', extractedValue: 'Maharashtra (Code 27)', profileValue: 'Maharashtra', isMatch: true },
-          ],
-          criticalDiscrepancies: [],
-          advisoryNotes: ['All corporate identity credentials match profile with 100% accuracy.'],
-          geminiValidated: true,
-          scanTimestamp: '2026-06-12 10:32',
-        },
-      },
-      {
-        id: 'doc_up_02',
-        approvalCode: 'SPCB_CTE',
-        approvalTitle: 'Consent to Establish (CTE / NOC)',
-        documentTypeCode: 'WATER_BALANCE',
-        documentName: 'Water Balance Diagram & Effluent Treatment Scheme',
-        fileName: 'Apex_Water_Balance_Draft_v1.pdf',
-        fileSizeKb: 2840,
-        uploadedAt: '2026-08-25 14:15',
-        status: 'NEEDS CORRECTION',
-        expiryDate: '2027-08-25',
-        issues: [
-          'Total water demand stated in document is 45 KLD, whereas business profile registers 65 KLD (+20 KLD deviation).',
-          'Effluent generation stated as 28.5 KLD does not account for the additional 4 TPH steam boiler blowdown specified in profile.',
-        ],
-        validationStatus: 'mismatch',
-        validationResult: {
-          score: 62,
-          status: 'mismatch',
-          verifiedFields: [
-            { field: 'Unit Location', extractedValue: 'Plot W-42, MIDC Tarapur', profileValue: 'MIDC Tarapur Chemical Zone', isMatch: true },
-            { field: 'Total Fresh Water Intake', extractedValue: '45.0 KLD', profileValue: '65.0 KLD', isMatch: false },
-            { field: 'Industrial Effluent Generation', extractedValue: '28.5 KLD', profileValue: '42.0 KLD', isMatch: false },
-            { field: 'CPCB Pollution Category', extractedValue: 'Red Category (Synthetic Pharma)', profileValue: 'Red', isMatch: true },
-          ],
-          criticalDiscrepancies: [
-            'Total water demand stated in document is 45 KLD, whereas business profile registers 65 KLD (+20 KLD deviation).',
-            'Effluent generation stated as 28.5 KLD does not account for the additional 4 TPH steam boiler blowdown specified in profile.',
-          ],
-          advisoryNotes: [
-            'Revise hydraulic load calculations to include boiler feed water requirements before resubmitting to SPCB.',
-          ],
-          geminiValidated: true,
-          scanTimestamp: '2026-08-25 14:18',
-        },
-      },
-      {
-        id: 'doc_up_03',
-        approvalCode: 'SPCB_CTE',
-        approvalTitle: 'Consent to Establish (CTE / NOC)',
-        documentTypeCode: 'PROCESS_FLOW',
-        documentName: 'Manufacturing Process Flow Diagram',
-        fileName: 'Apex_Pharma_Process_Flow_Synthesis.pdf',
-        fileSizeKb: 3950,
-        uploadedAt: '2026-08-26 11:20',
-        status: 'VERIFIED',
-        expiryDate: 'N/A (Process Spec)',
-        issues: [],
-        validationStatus: 'passed',
-        validationResult: {
-          score: 94,
-          status: 'passed',
-          verifiedFields: [
-            { field: 'Solvents Listed', extractedValue: 'Toluene, Isopropanol, DCM', profileValue: 'Toluene, Isopropanol, Dichloromethane (DCM)', isMatch: true },
-            { field: 'Solvent Recovery Efficiency', extractedValue: '96.5% Recovery in Closed Loop', profileValue: 'Expected >95%', isMatch: true },
-            { field: 'Scrubber Configuration', extractedValue: 'Two-stage packed bed alkali scrubbers', profileValue: 'Red Category Requirement', isMatch: true },
-          ],
-          criticalDiscrepancies: [],
-          advisoryNotes: [
-            'Vapour recovery condenser specs align with CPCB clean technology guidelines.',
-          ],
-          geminiValidated: true,
-          scanTimestamp: '2026-08-26 11:24',
-        },
-      },
-      {
-        id: 'doc_up_04',
-        approvalCode: 'DISCOM_POWER_SANCTION',
-        approvalTitle: 'High Tension (HT) Power Sanction & Grid Interconnection NOC',
-        documentTypeCode: 'LOAD_CHART',
-        documentName: 'Connected Load List & Single Line Diagram (SLD)',
-        fileName: 'Apex_Electrical_SLD_ContractorSigned.pdf',
-        fileSizeKb: 1890,
-        uploadedAt: '2026-07-28 09:40',
-        status: 'UNDER REVIEW',
-        expiryDate: '2028-07-28',
-        issues: [],
-        validationStatus: 'passed',
-        validationResult: {
-          score: 92,
-          status: 'passed',
-          verifiedFields: [
-            { field: 'Connected Load (kVA)', extractedValue: '450 kVA HT (11 kV Supply)', profileValue: '450 kVA', isMatch: true },
-            { field: 'Standby DG Set', extractedValue: '500 kVA Acoustic Enclosed', profileValue: '500 kVA', isMatch: true },
-            { field: 'Electrical Contractor License', extractedValue: 'Class A License No. MH-EL-8891', profileValue: 'Valid', isMatch: true },
-          ],
-          criticalDiscrepancies: [],
-          advisoryNotes: [
-            'Harmonic filter installation mentioned for VFD pumps conforms to CEIG norms.',
-          ],
-          geminiValidated: true,
-          scanTimestamp: '2026-07-28 09:45',
-        },
-      },
-      {
-        id: 'doc_up_05',
-        approvalCode: 'FIRE_NOC_PROVISIONAL',
-        approvalTitle: 'Provisional Fire Safety NOC & Building Scheme Approval',
-        documentTypeCode: 'FIRE_LAYOUT',
-        documentName: 'Provisional Fire Escape & Evacuation Plan',
-        fileName: 'Apex_Fire_Evacuation_Scheme_Draft.png',
-        fileSizeKb: 2450,
-        uploadedAt: '2026-09-02 15:45',
-        status: 'UPLOADED',
-        expiryDate: '2027-09-01',
-        issues: [],
-        validationStatus: 'unvalidated',
-      },
-      {
-        id: 'doc_up_06',
-        approvalCode: 'BOILER_REGISTRATION',
-        approvalTitle: 'Boiler Registration & Pressure Vessel Certificate (IBR 1950)',
-        documentTypeCode: 'BOILER_SPECS',
-        documentName: 'Boiler Manufacturer Drawing & Material Test Folder',
-        fileName: 'Thermax_4TPH_IBR_Design_Folder.pdf',
-        fileSizeKb: 4120,
-        uploadedAt: '2026-09-05 10:15',
-        status: 'UPLOADED',
-        expiryDate: '2029-09-05',
-        issues: [],
-        validationStatus: 'unvalidated',
-      },
-    ];
-
-    // Initial assistant greeting
-    this.chatHistory = [
-      {
-        id: 'msg_welcome',
-        sender: 'assistant',
-        text: 'Greetings. I am INDUSFLOW AI, your compliance orchestrator for SIH26130. I have analyzed your project profile ("Apex BioPharma", Red Category API manufacturing in MIDC Tarapur). \n\nYour immediate highest priority is responding to the MPCB query on your Consent to Establish (CTE) before the September 22 deadline regarding water balance calculations.',
-        timestamp: new Date().toISOString(),
-        recommendations: [
-          'Address MPCB Query on Effluent Treatment & Water Balance (due Sep 22)',
-          'Complete Fire Escape Layout submission for Provisional Fire NOC',
-          'Follow up on Environmental Clearance (MoEF&CC) day 88 of 105 SLA',
-        ],
-        relevantApprovals: ['SPCB_CTE', 'FIRE_NOC_PROVISIONAL', 'MOEF_EC'],
-      },
-    ];
+    this.currentPresetId = presetId;
+    this.profile = { ...preset.profile };
+    this.approvalsState.clear();
+    for (const [code, state] of preset.approvalStates) {
+      this.approvalsState.set(code, { ...state });
+    }
+    this.documents = JSON.parse(JSON.stringify(preset.documents));
+    this.chatHistory = JSON.parse(JSON.stringify(preset.initialChat));
+    return true;
   }
 
   public getProfile(): BusinessProfile {
@@ -347,7 +529,7 @@ export class IndusflowDataStore {
             score: 96,
             status: 'passed',
             verifiedFields: [
-              { field: 'Company Name', extractedValue: 'ABC Foods Manufacturing Pvt. Ltd.', profileValue: 'ABC Foods Manufacturing Pvt. Ltd.', isMatch: true },
+              { field: 'Company Name', extractedValue: 'ABC Foods Manufacturing', profileValue: 'ABC Foods Manufacturing', isMatch: true },
               { field: 'Location', extractedValue: 'Pune, Maharashtra', profileValue: 'Pune, Maharashtra', isMatch: true },
               { field: 'Industry', extractedValue: 'Food Manufacturing (Processing)', profileValue: 'Food Manufacturing', isMatch: true },
             ],
@@ -388,7 +570,7 @@ export class IndusflowDataStore {
         {
           id: `msg_abc_${Date.now()}`,
           sender: 'assistant',
-          text: 'Welcome ABC Foods Manufacturing Pvt. Ltd.! I have generated your customized industrial approval roadmap for your new Food Processing unit in Pune, Maharashtra.\n\nKey Highlights:\n- Categorized under CPCB Orange Category.\n- Land Allotment in Industrial Land is secured.\n- Critical next milestones: Apply for MPCB Consent to Establish (CTE), Provisional Fire Safety NOC, and FSSAI Central Manufacturing License.',
+          text: 'Welcome ABC Foods Manufacturing! I have generated your customized industrial approval roadmap for your new Food Processing unit in Pune, Maharashtra.\n\nKey Highlights:\n- Categorized under CPCB Orange Category.\n- Land Allotment in Industrial Land is secured.\n- Critical next milestones: Apply for MPCB Consent to Establish (CTE), Provisional Fire Safety NOC, and FSSAI Central Manufacturing License.',
           timestamp: new Date().toISOString(),
           recommendations: [
             'Submit CTE application to Maharashtra Pollution Control Board (MPCB)',
@@ -460,6 +642,10 @@ export class IndusflowDataStore {
 
   public getChatHistory(): ChatMessage[] {
     return [...this.chatHistory];
+  }
+
+  public clearChatHistory(): void {
+    this.chatHistory = [];
   }
 
   public addChatMessage(msg: Omit<ChatMessage, 'id' | 'timestamp'>): ChatMessage {

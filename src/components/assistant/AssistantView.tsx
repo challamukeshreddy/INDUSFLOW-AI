@@ -102,8 +102,8 @@ export const AssistantView: React.FC = () => {
         id: 'msg_welcome',
         sender: 'assistant',
         text: `Welcome! I am **INDUSFLOW Copilot**, an industrial approval and compliance decision-support assistant. I am actively tracking your project context for **${
-          profile?.companyName || 'Apex BioPharma Pvt. Ltd.'
-        }** (${profile?.cpcbCategory || 'Red'} Category, ${profile?.sector || 'Pharmaceuticals'} manufacturing).`,
+          profile?.companyName || 'ABC Foods Manufacturing'
+        }** (${profile?.cpcbCategory || 'Orange'} Category, ${profile?.sector || 'Food Processing'} manufacturing).`,
         timestamp: new Date().toISOString(),
         structured: {
           answer: `I am INDUSFLOW Copilot, your context-aware compliance assistant. I evaluate your active clearances, documents, bottlenecks, validation results, and statutory deadlines against the prototype industrial compliance knowledge base.`,
