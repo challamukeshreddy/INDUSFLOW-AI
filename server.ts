@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'node:fs';
 import { dataStore } from './server/dataStore.js';
 import { filterActiveDependencies, detectBottlenecks, generateNextActions } from './server/rulesEngine.js';
 import { preValidateDocumentWithAI, askComplianceAssistant } from './server/geminiService.js';
@@ -413,8 +414,15 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // In standalone production / container mode, serve static files from public/ if present
+    const publicDir = path.join(process.cwd(), 'public');
+    const publicIndex = path.join(publicDir, 'index.html');
+    const hasStaticFiles = fs.existsSync(publicIndex);
+
+    if (hasStaticFiles) {
+      app.use(express.static(publicDir));
+    }
+
     app.get('*', (req, res) => {
       if (req.path.startsWith('/api/')) {
         return res.status(404).json({ error: 'API endpoint not found' });
@@ -422,12 +430,10 @@ async function startServer() {
       if (req.path.startsWith('/assets/')) {
         return res.status(404).type('text/plain').send('Asset not found');
       }
-      const indexPath = path.join(distPath, 'index.html');
-      res.sendFile(indexPath, (err) => {
-        if (err) {
-          res.status(500).send('Application build files not found.');
-        }
-      });
+      if (hasStaticFiles) {
+        return res.sendFile(publicIndex);
+      }
+      res.status(404).type('text/plain').send('Frontend static files are served directly by Vercel CDN.');
     });
   }
 
