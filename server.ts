@@ -1,14 +1,14 @@
 import express from 'express';
 import path from 'path';
-import { createServer as createViteServer } from 'vite';
 import { dataStore } from './server/dataStore.js';
 import { filterActiveDependencies, detectBottlenecks, generateNextActions } from './server/rulesEngine.js';
 import { preValidateDocumentWithAI, askComplianceAssistant } from './server/geminiService.js';
 import { askIndusflowCopilot, formatCopilotText } from './server/copilotEngine.js';
 
+const app = express();
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
 async function startServer() {
-  const app = express();
-  const PORT = 3000;
 
   app.use(express.json({ limit: '15mb' }));
   app.use(express.urlencoded({ extended: true, limit: '15mb' }));
@@ -387,6 +387,7 @@ async function startServer() {
   // Vite Integration (Dev vs Prod)
   // ----------------------------------------------------
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -396,13 +397,23 @@ async function startServer() {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      const indexPath = path.join(distPath, 'index.html');
+      res.sendFile(indexPath, (err) => {
+        if (err) {
+          res.status(500).send('Application build files not found.');
+        }
+      });
     });
   }
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[INDUSFLOW AI] Server listening on http://0.0.0.0:${PORT}`);
   });
+
+  return app;
 }
 
 startServer();
+
+export default app;
+export { app };

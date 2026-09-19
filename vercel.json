@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/server.ts"
+    }
+  ],
+  "functions": {
+    "server.ts": {
+      "includeFiles": "dist/**"
+    }
+  }
+}
