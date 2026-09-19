@@ -1,0 +1,8 @@
+{
+  "name": "INDUSFLOW AI",
+  "description": "Intelligent industrial approval and compliance orchestration platform prototype for SIH26130.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
