@@ -120,51 +120,37 @@ Founders and plant managers face critical bottlenecks:
 
 ## 🏗️ System Architecture
 
+INDUSFLOW AI follows a robust, decoupled full-stack architecture designed for reliable local execution, live cloud demonstration on Google AI Studio, and verifiable SIH 2026 evaluation.
+
 ```mermaid
 flowchart TB
-    subgraph Client ["Client Layer (Browser / Google AI Studio Preview)"]
-        U[Industrial User / SIH Judge]
-        FE[React 19 + Vite 6 Single Page App]
-        CTX[App State Context & Navigation]
-        COP[Persistent AI Copilot Side Panel]
-        U <--> FE
-        FE <--> CTX
-        FE <--> COP
-    end
+    U[User / Industrial Applicant / SIH Judge]
 
-    subgraph Server ["Server Layer (Node.js & Express - Port 3000)"]
-        EX[Express HTTP Server]
-        API[API Routing Layer]
-        
-        subgraph Logic ["Business & Regulatory Logic"]
-            RE[Rules Engine\n- Bottleneck Detector\n- Dependency Filter\n- Next Action Generator]
-            DS[Application Data Store\n- Multi-Company Presets\n- Document Storage\n- Query Audit Trail]
-            KB[Statutory Knowledge Base\n- Acts, Clearances & SLAs\n- Prerequisite DAG]
-            CE[Copilot Engine\n- Deterministic Domain Matcher\n- Prompt Synthesizer]
-        end
+    FE[React 19 + Vite 6 Frontend\n- Dynamic Clearance Views & Dependency Graph\n- Pre-Validation Document Hub & Tracker\n- Persistent Global AI Copilot Side Panel]
 
-        subgraph AIIntegration ["AI & Intelligence Services"]
-            GS[Gemini Service Utility\n- Model Cascade Runner\n- Document Pre-Validator\n- Compliance Assistant]
-        end
-    end
+    API[Express 4 API Layer\n- Port 3000 REST Routing\n- Security & Payload Validation\n- Static Asset Distribution]
 
-    subgraph External ["External AI Infrastructure"]
-        GEMINI["Google Gemini API (@google/genai)\n- gemini-3.1-flash-lite\n- gemini-flash-latest\n- gemini-3.8-flash"]
-    end
+    RULES[Rules & Compliance Engine\n- Topological Sorter & Critical Path Finder\n- Statutory Bottleneck Detector\n- Prioritized Next Best Action Engine]
 
-    CTX <-->|REST API Fetch| EX
-    COP <-->|POST /api/assistant/chat| EX
-    EX --> API
-    API --> RE
-    API --> DS
-    API --> CE
-    RE <--> KB
-    CE <--> DS
-    CE <--> RE
-    CE --> GS
-    API --> GS
-    GS <-->|Encrypted Server-Side API Call| GEMINI
+    DATA[Application Data Store\n- In-Memory Multi-Enterprise Presets\n- Document Metadata & Audit Records\n- Department Query Notice State]
+
+    AI[Google Gemini AI Services\n- Server-Side @google/genai SDK v2.4.0\n- Multi-Model Cascade (Flash-Lite / Flash)\n- Pre-Submission Discrepancy Validation\n- Grounded 4-Part Regulatory Advice]
+
+    U -->|Interacts via Browser / Touch| FE
+    FE -->|Async HTTP / REST API| API
+    API -->|Computes Clearances & Risks| RULES
+    API -->|Reads / Updates Dossier State| DATA
+    API -->|Synthesizes Dossier & Query Context| AI
+    RULES <-->|Evaluates Active Parameters| DATA
 ```
+
+### Component Architecture Details
+
+* **Client Layer (`/src`)**: Single-page application built on React 19, TypeScript, and Tailwind CSS 4. Uses Motion for fluid drawer animations and Lucide React for consistent domain iconography. Managed by a centralized `AppContext` providing state synchronization for active enterprise selection, document validation, and query replies.
+* **Server & Routing Layer (`server.ts`)**: Custom Express 4 server operating strictly on port 3000. Proxies all statutory data requests and AI interactions while keeping the Gemini API key hidden from browser code.
+* **Rules & Business Logic Layer (`server/rulesEngine.ts`, `server/knowledgeBase.ts`)**: Pure deterministic regulatory logic containing statutory acts (Water Act 1974, Air Act 1981, Factories Act 1948, Indian Boilers Act 1923), clearance dependencies, fee calculators, and deemed-approval SLA definitions.
+* **Application Data Store (`server/dataStore.ts`)**: State manager containing four distinct industrial enterprise dossiers, tracking active document records, inspection stages, and query notice lifecycles.
+* **AI Intelligence Services (`server/geminiService.ts`, `server/copilotEngine.ts`)**: Centralized LLM gateway using `@google/genai`. Formats structured prompts with live profile context, enforces a 3-model resilience cascade, and delivers four-part structured regulatory guidance.
 
 ---
 
