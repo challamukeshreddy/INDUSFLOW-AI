@@ -7,31 +7,12 @@ import { preValidateDocumentWithAI, askComplianceAssistant } from './server/gemi
 import { askIndusflowCopilot, formatCopilotText } from './server/copilotEngine.js';
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const PORT = 3000;
 
 async function startServer() {
 
   app.use(express.json({ limit: '15mb' }));
   app.use(express.urlencoded({ extended: true, limit: '15mb' }));
-
-  // Support Vercel serverless rewrite routing & preserve original requested path
-  app.use((req, res, next) => {
-    if (req.query && typeof req.query.__route === 'string') {
-      const targetRoute = req.query.__route;
-      delete req.query.__route;
-      const queryParams = new URLSearchParams(req.query as Record<string, string>).toString();
-      req.url = queryParams ? `${targetRoute}?${queryParams}` : targetRoute;
-    } else if (req.url === '/server.ts' || req.url.startsWith('/server.ts?')) {
-      const target = (req.headers['x-matched-path'] as string) ||
-                     (req.headers['x-forwarded-uri'] as string) ||
-                     (req.headers['x-original-url'] as string) ||
-                     req.originalUrl;
-      if (target && !target.startsWith('/server.ts')) {
-        req.url = target;
-      }
-    }
-    next();
-  });
 
   // ----------------------------------------------------
   // API Endpoints
@@ -414,26 +395,23 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // In standalone production / container mode, serve static files from public/ if present
-    const publicDir = path.join(process.cwd(), 'public');
-    const publicIndex = path.join(publicDir, 'index.html');
-    const hasStaticFiles = fs.existsSync(publicIndex);
+    // In production / container mode, serve built frontend assets from dist
+    const distDir = path.join(process.cwd(), 'dist');
+    const indexFile = path.join(distDir, 'index.html');
+    const hasStaticFiles = fs.existsSync(indexFile);
 
     if (hasStaticFiles) {
-      app.use(express.static(publicDir));
+      app.use(express.static(distDir));
     }
 
     app.get('*', (req, res) => {
       if (req.path.startsWith('/api/')) {
         return res.status(404).json({ error: 'API endpoint not found' });
       }
-      if (req.path.startsWith('/assets/')) {
-        return res.status(404).type('text/plain').send('Asset not found');
-      }
       if (hasStaticFiles) {
-        return res.sendFile(publicIndex);
+        return res.sendFile(indexFile);
       }
-      res.status(404).type('text/plain').send('Frontend static files are served directly by Vercel CDN.');
+      res.status(404).type('text/plain').send('Frontend application static build files not found.');
     });
   }
 
