@@ -124,24 +124,24 @@ INDUSFLOW AI follows a robust, decoupled full-stack architecture designed for re
 
 ```mermaid
 flowchart TB
-    U[User / Industrial Applicant / SIH Judge]
+    U["User / Industrial Applicant / SIH Judge"]
 
-    FE[React 19 + Vite 6 Frontend\n- Dynamic Clearance Views & Dependency Graph\n- Pre-Validation Document Hub & Tracker\n- Persistent Global AI Copilot Side Panel]
+    FE["React 19 + Vite 6 Frontend<br/>• Dynamic Clearance Views & Dependency Graph<br/>• Pre-Validation Document Hub & Tracker<br/>• Persistent Global AI Copilot Side Panel"]
 
-    API[Express 4 API Layer\n- Port 3000 REST Routing\n- Security & Payload Validation\n- Static Asset Distribution]
+    API["Express 4 API Layer<br/>• Port 3000 REST Routing<br/>• Security & Payload Validation<br/>• Static Asset Distribution"]
 
-    RULES[Rules & Compliance Engine\n- Topological Sorter & Critical Path Finder\n- Statutory Bottleneck Detector\n- Prioritized Next Best Action Engine]
+    RULES["Rules & Compliance Engine<br/>• Topological Sorter & Critical Path Finder<br/>• Statutory Bottleneck Detector<br/>• Prioritized Next Best Action Engine"]
 
-    DATA[Application Data Store\n- In-Memory Multi-Enterprise Presets\n- Document Metadata & Audit Records\n- Department Query Notice State]
+    DATA["Application Data Store<br/>• In-Memory Multi-Enterprise Presets<br/>• Document Metadata & Audit Records<br/>• Department Query Notice State"]
 
-    AI[Google Gemini AI Services\n- Server-Side @google/genai SDK v2.4.0\n- Multi-Model Cascade (Flash-Lite / Flash)\n- Pre-Submission Discrepancy Validation\n- Grounded 4-Part Regulatory Advice]
+    AI["Google Gemini AI Services<br/>• Server-Side @google/genai SDK v2.4.0<br/>• Multi-Model Cascade (Flash-Lite / Flash)<br/>• Pre-Submission Discrepancy Validation<br/>• Grounded 4-Part Regulatory Advice"]
 
-    U -->|Interacts via Browser / Touch| FE
-    FE -->|Async HTTP / REST API| API
-    API -->|Computes Clearances & Risks| RULES
-    API -->|Reads / Updates Dossier State| DATA
-    API -->|Synthesizes Dossier & Query Context| AI
-    RULES <-->|Evaluates Active Parameters| DATA
+    U -->|"Interacts via Browser / Touch"| FE
+    FE -->|"Async HTTP / REST API"| API
+    API -->|"Computes Clearances & Risks"| RULES
+    API -->|"Reads / Updates Dossier State"| DATA
+    API -->|"Synthesizes Dossier & Query Context"| AI
+    RULES -->|"Evaluates Active Parameters"| DATA
 ```
 
 ### Component Architecture Details
